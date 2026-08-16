@@ -23,6 +23,9 @@ let indicadorTimer = null;
 let respaldoAbierto = null; // 'exportar' | 'importar' | null
 let archivoImportarTexto = null;
 let archivoImportarNombre = null;
+let avisoAbiertoId = null; // id del aviso/recordatorio con el mensaje desplegado (uno solo a la vez)
+let avisosDescartados = new Set(); // ids de avisos deslizados hacia la derecha en esta vista
+let swipeEstado = null; // seguimiento del gesto de deslizar en curso
 
 function init() {
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
@@ -36,6 +39,7 @@ function init() {
 
   document.getElementById('estado-cuenta').addEventListener('click', onEstadoCuentaClick);
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
+  document.getElementById('estado-cuenta').addEventListener('pointerdown', onAvisoPointerDown);
   document.getElementById('respaldo').addEventListener('click', onRespaldoClick);
 }
 
@@ -48,6 +52,8 @@ function resetEstadosDeInteraccion() {
   accionesMesExpandido = false;
   confirmandoAccionMes = null;
   indicadorExpandido = false;
+  avisoAbiertoId = null;
+  avisosDescartados.clear();
   if (indicadorTimer) {
     clearTimeout(indicadorTimer);
     indicadorTimer = null;
@@ -180,6 +186,58 @@ function renderEncabezadoMes(mesObj) {
   return html;
 }
 
+// Ajustes de presupuesto y recordatorios de gastos fijos, minimalistas:
+// solo íconos por defecto. Tocar un ícono despliega su mensaje debajo (y
+// cierra cualquier otro que estuviera abierto — uno solo a la vez).
+// Deslizar el mensaje hacia la derecha lo descarta de esta vista (no borra
+// ningún dato: un ajuste sigue siendo parte del mes, un gasto fijo sigue
+// pendiente; solo se oculta la notificación hasta cambiar de mes).
+function renderAvisosYRecordatorios(mesObj, gastosFijosPendientes) {
+  const items = [];
+
+  (mesObj.ajustes || []).forEach((aj, i) => {
+    const id = `ajuste-${i}`;
+    if (avisosDescartados.has(id)) return;
+    items.push({ id, icono: '⚠️', tipo: 'aviso', mensaje: `${aj.concepto}: ${formatMoney(aj.importe)}` });
+  });
+
+  if (mesObj.estado === 'activo') {
+    gastosFijosPendientes.forEach((gf) => {
+      const id = `recordatorio-${gf.id}`;
+      if (avisosDescartados.has(id)) return;
+      items.push({
+        id,
+        icono: '🔔',
+        tipo: 'recordatorio',
+        gfId: gf.id,
+        mensaje: `Gasto fijo mensual sin confirmar todavía — ${gf.concepto} (${formatMoney(gf.importe)}).${gf.nota ? ` ${gf.nota}` : ''}`,
+      });
+    });
+  }
+
+  if (!items.length) return '';
+
+  let html = '<div class="avisos-iconos">';
+  items.forEach((it) => {
+    html += `<button type="button" class="btn-aviso-icono${it.id === avisoAbiertoId ? ' btn-aviso-icono--activo' : ''}" data-action="toggle-aviso" data-aviso-id="${it.id}" title="${it.tipo === 'recordatorio' ? 'Recordatorio' : 'Aviso'}">${it.icono}</button>`;
+  });
+  html += '</div>';
+
+  const abierto = items.find((it) => it.id === avisoAbiertoId);
+  if (abierto) {
+    html += `
+      <div class="aviso-swipe" data-aviso-id="${abierto.id}">
+        <div class="aviso-swipe__fondo">🗑️ Deslizar para descartar</div>
+        <div class="aviso-swipe__frente">
+          <span>${abierto.icono} ${abierto.mensaje}</span>
+          ${abierto.tipo === 'recordatorio' ? `<button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${abierto.gfId}">Registrar ahora</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  return html;
+}
+
 function renderEstadoDeCuenta() {
   const cont = document.getElementById('estado-cuenta');
   const hogar = state.hogares[hogarSeleccionado];
@@ -208,24 +266,7 @@ function renderEstadoDeCuenta() {
   }
   html += `</div>`;
 
-  if (mesObj.ajustes && mesObj.ajustes.length) {
-    html += '<div class="ajustes">';
-    mesObj.ajustes.forEach((aj) => {
-      html += `<p class="ajuste">⚠️ ${aj.concepto}: ${formatMoney(aj.importe)}</p>`;
-    });
-    html += '</div>';
-  }
-
-  if (mesObj.estado === 'activo' && gastosFijosPendientes.length) {
-    html += '<div class="recordatorio">';
-    gastosFijosPendientes.forEach((gf) => {
-      html += `
-        <p>🔔 Recordatorio: gasto fijo mensual sin confirmar todavía — <strong>${gf.concepto}</strong> (${formatMoney(gf.importe)}).${gf.nota ? ` <em class="nota-gasto-fijo">${gf.nota}</em>` : ''}
-          <button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${gf.id}">Registrar ahora</button>
-        </p>`;
-    });
-    html += '</div>';
-  }
+  html += renderAvisosYRecordatorios(mesObj, gastosFijosPendientes);
 
   if (!mesObj.detalleDisponible) {
     html += `
@@ -447,6 +488,11 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
+    case 'toggle-aviso':
+      avisoAbiertoId = avisoAbiertoId === btn.dataset.avisoId ? null : btn.dataset.avisoId;
+      renderEstadoDeCuenta();
+      break;
+
     case 'abrir-form-movimiento':
       formMovimientoAbierto = true;
       renderEstadoDeCuenta();
@@ -483,6 +529,7 @@ function onEstadoCuentaClick(e) {
       if (!gf) break;
       editandoMovId = null;
       formMovimientoAbierto = true;
+      avisoAbiertoId = null;
       renderEstadoDeCuenta();
       const form = document.getElementById('form-movimiento');
       if (form) {
@@ -725,6 +772,72 @@ function onRespaldoClick(e) {
       break;
     }
   }
+}
+
+// Gesto de deslizar hacia la derecha para descartar un aviso/recordatorio
+// desplegado. No se arma el "modo arrastre" hasta que el movimiento sea
+// claramente horizontal, así un toque simple (por ejemplo, en el botón
+// "Registrar ahora") sigue funcionando como un click normal.
+const UMBRAL_SWIPE_DESCARTAR = 70;
+
+function onAvisoPointerDown(e) {
+  const frente = e.target.closest('.aviso-swipe__frente');
+  if (!frente) return;
+  const contenedor = frente.closest('.aviso-swipe');
+  swipeEstado = {
+    pointerId: e.pointerId,
+    id: contenedor.dataset.avisoId,
+    startX: e.clientX,
+    startY: e.clientY,
+    dx: 0,
+    elFrente: frente,
+    arrastrando: false,
+  };
+  frente.addEventListener('pointermove', onAvisoPointerMove);
+  frente.addEventListener('pointerup', onAvisoPointerUp);
+  frente.addEventListener('pointercancel', onAvisoPointerUp);
+}
+
+function onAvisoPointerMove(e) {
+  if (!swipeEstado || e.pointerId !== swipeEstado.pointerId) return;
+  const dx = e.clientX - swipeEstado.startX;
+  const dy = e.clientY - swipeEstado.startY;
+
+  if (!swipeEstado.arrastrando) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Fue un scroll vertical, no un swipe: se cancela el seguimiento.
+      swipeEstado = null;
+      return;
+    }
+    swipeEstado.arrastrando = true;
+    swipeEstado.elFrente.setPointerCapture(e.pointerId);
+    swipeEstado.elFrente.style.transition = 'none';
+  }
+
+  const dxClamped = Math.max(0, dx);
+  swipeEstado.dx = dxClamped;
+  swipeEstado.elFrente.style.transform = `translateX(${dxClamped}px)`;
+}
+
+function onAvisoPointerUp(e) {
+  if (!swipeEstado || e.pointerId !== swipeEstado.pointerId) return;
+  const { elFrente, arrastrando, dx, id } = swipeEstado;
+  elFrente.removeEventListener('pointermove', onAvisoPointerMove);
+  elFrente.removeEventListener('pointerup', onAvisoPointerUp);
+  elFrente.removeEventListener('pointercancel', onAvisoPointerUp);
+
+  if (arrastrando) {
+    elFrente.style.transition = 'transform 0.2s ease';
+    if (dx > UMBRAL_SWIPE_DESCARTAR) {
+      avisosDescartados.add(id);
+      if (avisoAbiertoId === id) avisoAbiertoId = null;
+      renderEstadoDeCuenta();
+    } else {
+      elFrente.style.transform = 'translateX(0)';
+    }
+  }
+  swipeEstado = null;
 }
 
 document.addEventListener('DOMContentLoaded', init);

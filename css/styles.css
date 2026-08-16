@@ -285,27 +285,64 @@ main {
   color: var(--azul);
 }
 
-.ajuste {
-  background: rgba(217, 164, 65, 0.12);
-  border-left: 3px solid var(--amarillo);
-  padding: 0.5rem 0.75rem;
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-  border-radius: 4px;
+/* Ajustes y recordatorios: solo íconos por defecto, el mensaje se
+   despliega debajo al tocar uno (uno solo a la vez) y se descarta
+   deslizándolo hacia la derecha. */
+.avisos-iconos {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
 }
 
-.recordatorio p {
+.btn-aviso-icono {
+  border: 1px solid var(--borde);
+  background: var(--superficie-alta);
+  color: var(--texto);
+  font-size: 1.05rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn-aviso-icono--activo {
+  border-color: var(--amarillo);
+  background: rgba(217, 164, 65, 0.16);
+}
+
+.aviso-swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.aviso-swipe__fondo {
+  position: absolute;
+  inset: 0;
+  background: var(--rojo);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.aviso-swipe__frente {
+  position: relative;
   background: rgba(217, 164, 65, 0.12);
   border-left: 3px solid var(--amarillo);
   padding: 0.5rem 0.75rem;
-  margin: 0.5rem 0;
   font-size: 0.9rem;
-  border-radius: 4px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+  touch-action: pan-y;
+  user-select: none;
 }
 
 .aviso,
@@ -580,14 +617,6 @@ form select {
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-}
-
-.nota-gasto-fijo {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--amarillo);
-  font-style: italic;
-  margin-top: 0.15rem;
 }
 
 /* Exportar / Importar: mismo lenguaje visual que el candado de cerrar
