@@ -1,8 +1,12 @@
-// Paso 2: registrar, editar y eliminar gastos del mes activo, con
-// recálculo automático de saldo (el saldo siempre se calcula a partir de los
+// Registrar, editar y eliminar gastos del mes activo, con recálculo
+// automático de saldo (el saldo siempre se calcula a partir de los
 // movimientos, nunca se guarda "congelado"). Por ahora solo Colonia está
 // habilitada; Miguelete queda fuera del selector hasta que se den de alta
 // sus datos reales.
+//
+// Diseño minimalista: los controles secundarios (agregar gasto, agregar
+// previsto, cerrar/reabrir el mes) se muestran como "burbujas" que se
+// despliegan al tocarlas, en vez de secciones siempre visibles.
 
 let state = loadState();
 let hogarSeleccionado = 'colonia';
@@ -10,6 +14,12 @@ let mesSeleccionado = null;
 let editandoMovId = null;
 let confirmandoPrevistoId = null;
 let conceptosExpandidos = new Set();
+let formMovimientoAbierto = false;
+let formPrevistoAbierto = false;
+let accionesMesExpandido = false;
+let confirmandoAccionMes = null; // 'cerrar' | 'reabrir' | null
+let indicadorExpandido = false;
+let indicadorTimer = null;
 
 function init() {
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
@@ -24,6 +34,21 @@ function init() {
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
 }
 
+function resetEstadosDeInteraccion() {
+  editandoMovId = null;
+  confirmandoPrevistoId = null;
+  conceptosExpandidos.clear();
+  formMovimientoAbierto = false;
+  formPrevistoAbierto = false;
+  accionesMesExpandido = false;
+  confirmandoAccionMes = null;
+  indicadorExpandido = false;
+  if (indicadorTimer) {
+    clearTimeout(indicadorTimer);
+    indicadorTimer = null;
+  }
+}
+
 function renderSelectorHogares() {
   const cont = document.getElementById('selector-hogares');
   cont.innerHTML = '';
@@ -36,9 +61,7 @@ function renderSelectorHogares() {
       const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
       const activo = meses.find((m) => m.estado === 'activo');
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
-      editandoMovId = null;
-      confirmandoPrevistoId = null;
-      conceptosExpandidos.clear();
+      resetEstadosDeInteraccion();
       renderSelectorHogares();
       renderSelectorMeses();
       renderEstadoDeCuenta();
@@ -86,9 +109,7 @@ function renderSelectorMeses() {
 
     btn.addEventListener('click', () => {
       mesSeleccionado = mesKey;
-      editandoMovId = null;
-      confirmandoPrevistoId = null;
-      conceptosExpandidos.clear();
+      resetEstadosDeInteraccion();
       renderSelectorMeses();
       renderEstadoDeCuenta();
     });
@@ -104,6 +125,54 @@ function getMesActual() {
 function persistirYRenderizar() {
   saveState(state);
   renderEstadoDeCuenta();
+}
+
+// Encabezado minimalista del mes: un indicador (punto verde = activo,
+// candado = cerrado) que se despliega al tocarlo. En el mes activo el
+// despliegue es momentáneo (muestra "En curso" un par de segundos y
+// vuelve solo al punto); en el mes cerrado el despliegue queda fijo hasta
+// tocar de nuevo, y ahí aparecen el PDF y el lápiz para reabrir.
+function renderEncabezadoMes(mesObj) {
+  let html = '<div class="estado-mes-header">';
+
+  if (confirmandoAccionMes) {
+    const esCerrar = confirmandoAccionMes === 'cerrar';
+    const pregunta = esCerrar
+      ? '¿Cerrar este estado de cuenta? Va a quedar de solo lectura.'
+      : '¿Reabrir para corregir un error?';
+    html += `
+      <div class="confirmar-accion-mes">
+        <span>${pregunta}</span>
+        <button type="button" class="btn-confirmar" data-action="confirmar-accion-mes">Confirmar</button>
+        <button type="button" class="btn-cancelar" data-action="cancelar-accion-mes">Cancelar</button>
+      </div>`;
+    html += '</div>';
+    return html;
+  }
+
+  if (mesObj.estado === 'activo') {
+    html += `
+      <button type="button" class="indicador-activo" data-action="toggle-indicador" title="Estado del mes">
+        <span class="punto-verde"></span>
+        ${indicadorExpandido ? '<span class="indicador-texto">En curso</span>' : ''}
+      </button>
+      <div class="acciones-mes-mini">
+        <button type="button" class="btn-pdf-mini" data-action="descargar-pdf">📄 PDF</button>
+        <button type="button" class="btn-icono-mes" data-action="pedir-cerrar-mes" title="Cerrar estado de cuenta">🔒</button>
+      </div>`;
+  } else {
+    html += `<button type="button" class="indicador-cerrado" data-action="toggle-acciones-mes" title="Mes cerrado, solo lectura">🔒</button>`;
+    if (accionesMesExpandido) {
+      html += `
+        <div class="acciones-mes-mini">
+          <button type="button" class="btn-pdf-mini" data-action="descargar-pdf">📄 PDF</button>
+          ${mesObj.detalleDisponible ? '<button type="button" class="btn-icono-mes" data-action="pedir-reabrir-mes" title="Reabrir para corregir">✏️</button>' : ''}
+        </div>`;
+    }
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function renderEstadoDeCuenta() {
@@ -125,20 +194,7 @@ function renderEstadoDeCuenta() {
     (gf) => gf.activo && !mesObj.movimientos.some((m) => normalizarConcepto(m.concepto) === normalizarConcepto(gf.concepto))
   );
 
-  let html = '';
-
-  html += `<div class="estado-mes-header">
-    <span class="badge-estado ${mesObj.estado === 'cerrado' ? 'badge-cerrado' : 'badge-activo'}">
-      ${mesObj.estado === 'cerrado' ? '🔒 Cerrado — solo lectura' : '🟢 En curso'}
-    </span>
-    <div class="acciones-mes">
-      <button type="button" class="btn-pdf" data-action="descargar-pdf">📄 Descargar PDF</button>`;
-  if (mesObj.estado === 'activo') {
-    html += `<button type="button" class="btn-cerrar" data-action="cerrar-mes">🔒 Cerrar estado de cuenta</button>`;
-  } else if (mesObj.detalleDisponible) {
-    html += `<button type="button" class="btn-reabrir" data-action="reabrir-mes">Reabrir (corregir un error)</button>`;
-  }
-  html += `</div></div>`;
+  let html = renderEncabezadoMes(mesObj);
 
   html += `<div class="resumen">
     <div><span class="etiqueta">Presupuesto habitual</span><span class="valor">${formatMoney(mesObj.presupuesto)}</span></div>`;
@@ -219,84 +275,98 @@ function renderEstadoDeCuenta() {
 
   if (editable) {
     const editando = editandoMovId ? mesObj.movimientos.find((m) => m.id === editandoMovId) : null;
-    html += `
-      <h3>${editando ? 'Editar movimiento' : 'Agregar movimiento'}</h3>
-      <form id="form-movimiento" data-editing-id="${editando ? editando.id : ''}">
-        <label>Fecha
-          <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}"
-            value="${editando ? editando.fecha : ''}">
-        </label>
-        <label>Tipo
-          <select name="tipo">
-            <option value="gasto_real" ${editando && editando.tipo === 'gasto_real' ? 'selected' : ''}>Gasto real</option>
-            <option value="ingreso" ${editando && editando.tipo === 'ingreso' ? 'selected' : ''}>Ingreso</option>
-          </select>
-        </label>
-        <label>Concepto
-          <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE"
-            value="${editando ? (editando.pendienteAclaracion ? '' : editando.concepto) : ''}">
-        </label>
-        <label>Importe ($)
-          <input type="number" name="importe" min="1" step="1" required value="${editando ? editando.importe : ''}">
-        </label>
-        <div class="acciones-form">
-          <button type="submit">${editando ? 'Guardar cambios' : 'Agregar'}</button>
-          ${editando ? '<button type="button" data-action="cancelar-edicion">Cancelar</button>' : ''}
-        </div>
-      </form>`;
+    const abierto = formMovimientoAbierto || !!editando;
+    if (abierto) {
+      html += `
+        <form id="form-movimiento" class="form-burbuja" data-editing-id="${editando ? editando.id : ''}">
+          <label>Fecha
+            <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}"
+              value="${editando ? editando.fecha : ''}">
+          </label>
+          <label>Tipo
+            <select name="tipo">
+              <option value="gasto_real" ${editando && editando.tipo === 'gasto_real' ? 'selected' : ''}>Gasto real</option>
+              <option value="ingreso" ${editando && editando.tipo === 'ingreso' ? 'selected' : ''}>Ingreso</option>
+            </select>
+          </label>
+          <label>Concepto
+            <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE"
+              value="${editando ? (editando.pendienteAclaracion ? '' : editando.concepto) : ''}">
+          </label>
+          <label>Importe ($)
+            <input type="number" name="importe" min="1" step="1" required value="${editando ? editando.importe : ''}">
+          </label>
+          <div class="acciones-form">
+            <button type="submit">${editando ? 'Guardar cambios' : 'Agregar'}</button>
+            <button type="button" data-action="cerrar-form-movimiento">Cancelar</button>
+          </div>
+        </form>`;
+    } else {
+      html += `<button type="button" class="burbuja-agregar" data-action="abrir-form-movimiento">+ Agregar gasto</button>`;
+    }
   }
 
-  html += '<h3>Gastos previstos (no descuentan del saldo)</h3>';
-  if (mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
-    html += '<ul class="previstos">';
-    mesObj.gastosPrevistos.forEach((p) => {
-      html += `<li>
-        <div class="previsto-linea">
-          <span>${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</span>
-          ${editable ? `<span class="previsto-acciones">
-            <button type="button" class="btn-link" data-action="confirmar-previsto" data-id="${p.id}">Confirmar como gasto real</button>
-            <button type="button" class="btn-link btn-link--rojo" data-action="eliminar-previsto" data-id="${p.id}">Eliminar</button>
-          </span>` : ''}
-        </div>`;
-      if (editable && confirmandoPrevistoId === p.id) {
-        html += `
-          <form id="form-confirmar-previsto" data-previsto-id="${p.id}" class="form-inline">
-            <label>Fecha
-              <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}">
-            </label>
-            <label>Importe real ($)
-              <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado}">
-            </label>
-            <div class="acciones-form">
-              <button type="submit">Confirmar</button>
-              <button type="button" data-action="cancelar-confirmar-previsto">Cancelar</button>
-            </div>
-          </form>`;
-      }
-      html += '</li>';
-    });
-    html += '</ul>';
-  } else {
-    html += '<p class="aviso">No hay gastos previstos cargados para este mes.</p>';
-  }
+  // Los gastos previstos solo tienen sentido en el mes que está
+  // transcurriendo: un mes cerrado no muestra esta sección.
+  if (mesObj.estado === 'activo') {
+    html += '<div class="caja-previstos">';
+    html += '<div class="caja-previstos__titulo">⚠️ Gastos previstos</div>';
 
-  if (editable) {
-    html += `
-      <h4>Agregar gasto previsto</h4>
-      <form id="form-previsto">
-        <label>Concepto
-          <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE">
-        </label>
-        <label>Importe estimado ($)
-          <input type="number" name="importeEstimado" min="1" step="1" required>
-        </label>
-        <label>Nota (opcional)
-          <input type="text" name="nota" placeholder="Ej: importe pendiente de confirmar">
-        </label>
-        <div class="acciones-form">
-          <button type="submit">Agregar previsto</button>
-        </div>
-      </form>`;
+    if (mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
+      html += '<ul class="previstos">';
+      mesObj.gastosPrevistos.forEach((p) => {
+        html += `<li>
+          <div class="previsto-linea">
+            <span>${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</span>
+            <span class="previsto-acciones">
+              <button type="button" class="btn-link" data-action="confirmar-previsto" data-id="${p.id}">Confirmar como gasto real</button>
+              <button type="button" class="btn-link btn-link--rojo" data-action="eliminar-previsto" data-id="${p.id}">Eliminar</button>
+            </span>
+          </div>`;
+        if (confirmandoPrevistoId === p.id) {
+          html += `
+            <form id="form-confirmar-previsto" data-previsto-id="${p.id}" class="form-inline">
+              <label>Fecha
+                <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}">
+              </label>
+              <label>Importe real ($)
+                <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado}">
+              </label>
+              <div class="acciones-form">
+                <button type="submit">Confirmar</button>
+                <button type="button" data-action="cancelar-confirmar-previsto">Cancelar</button>
+              </div>
+            </form>`;
+        }
+        html += '</li>';
+      });
+      html += '</ul>';
+    } else {
+      html += '<p class="aviso-previstos">No hay gastos previstos cargados para este mes.</p>';
+    }
+
+    if (formPrevistoAbierto) {
+      html += `
+        <form id="form-previsto" class="form-burbuja">
+          <label>Concepto
+            <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE">
+          </label>
+          <label>Importe estimado ($)
+            <input type="number" name="importeEstimado" min="1" step="1" required>
+          </label>
+          <label>Nota (opcional)
+            <input type="text" name="nota" placeholder="Ej: importe pendiente de confirmar">
+          </label>
+          <div class="acciones-form">
+            <button type="submit">Agregar previsto</button>
+            <button type="button" data-action="cerrar-form-previsto">Cancelar</button>
+          </div>
+        </form>`;
+    } else {
+      html += `<button type="button" class="burbuja-agregar burbuja-agregar--previsto" data-action="abrir-form-previsto">+ Agregar previsto</button>`;
+    }
+
+    html += '</div>';
   }
 
   cont.innerHTML = html;
@@ -318,20 +388,51 @@ function onEstadoCuentaClick(e) {
       }
       break;
 
-    case 'cerrar-mes':
-      if (confirm(`¿Cerrar el estado de cuenta de ${mesLabel(mesObj.mes)}? Después de cerrarlo va a quedar de solo lectura: no se van a poder agregar, editar ni eliminar gastos hasta reabrirlo.`)) {
-        cerrarMes(mesObj);
-        editandoMovId = null;
-        confirmandoPrevistoId = null;
-        persistirYRenderizar();
+    case 'toggle-indicador':
+      indicadorExpandido = !indicadorExpandido;
+      if (indicadorTimer) clearTimeout(indicadorTimer);
+      if (indicadorExpandido) {
+        indicadorTimer = setTimeout(() => {
+          indicadorExpandido = false;
+          indicadorTimer = null;
+          renderEstadoDeCuenta();
+        }, 2200);
       }
+      renderEstadoDeCuenta();
       break;
 
-    case 'reabrir-mes':
-      if (confirm(`¿Reabrir el estado de cuenta de ${mesLabel(mesObj.mes)} para corregir un error? Va a volver a permitir agregar, editar y eliminar gastos.`)) {
+    case 'toggle-acciones-mes':
+      accionesMesExpandido = !accionesMesExpandido;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'pedir-cerrar-mes':
+      confirmandoAccionMes = 'cerrar';
+      renderEstadoDeCuenta();
+      break;
+
+    case 'pedir-reabrir-mes':
+      confirmandoAccionMes = 'reabrir';
+      renderEstadoDeCuenta();
+      break;
+
+    case 'cancelar-accion-mes':
+      confirmandoAccionMes = null;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'confirmar-accion-mes':
+      if (confirmandoAccionMes === 'cerrar') {
+        cerrarMes(mesObj);
+      } else if (confirmandoAccionMes === 'reabrir') {
         reabrirMes(mesObj);
-        persistirYRenderizar();
       }
+      confirmandoAccionMes = null;
+      accionesMesExpandido = false;
+      editandoMovId = null;
+      formMovimientoAbierto = false;
+      confirmandoPrevistoId = null;
+      persistirYRenderizar();
       break;
 
     case 'toggle-concepto':
@@ -343,14 +444,21 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
-    case 'editar-mov':
-      editandoMovId = btn.dataset.id;
-      confirmandoPrevistoId = null;
+    case 'abrir-form-movimiento':
+      formMovimientoAbierto = true;
       renderEstadoDeCuenta();
       break;
 
-    case 'cancelar-edicion':
+    case 'cerrar-form-movimiento':
+      formMovimientoAbierto = false;
       editandoMovId = null;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'editar-mov':
+      editandoMovId = btn.dataset.id;
+      formMovimientoAbierto = true;
+      confirmandoPrevistoId = null;
       renderEstadoDeCuenta();
       break;
 
@@ -358,7 +466,10 @@ function onEstadoCuentaClick(e) {
       const mov = mesObj.movimientos.find((m) => m.id === btn.dataset.id);
       if (mov && confirm(`¿Eliminar el movimiento "${mov.concepto}" (${formatMoney(mov.importe)})? El saldo de los movimientos posteriores se recalcula solo.`)) {
         eliminarMovimiento(mesObj, btn.dataset.id);
-        if (editandoMovId === btn.dataset.id) editandoMovId = null;
+        if (editandoMovId === btn.dataset.id) {
+          editandoMovId = null;
+          formMovimientoAbierto = false;
+        }
         persistirYRenderizar();
       }
       break;
@@ -368,6 +479,7 @@ function onEstadoCuentaClick(e) {
       const gf = hogar.gastosFijos.find((g) => g.id === btn.dataset.gfId);
       if (!gf) break;
       editandoMovId = null;
+      formMovimientoAbierto = true;
       renderEstadoDeCuenta();
       const form = document.getElementById('form-movimiento');
       if (form) {
@@ -378,6 +490,16 @@ function onEstadoCuentaClick(e) {
       }
       break;
     }
+
+    case 'abrir-form-previsto':
+      formPrevistoAbierto = true;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'cerrar-form-previsto':
+      formPrevistoAbierto = false;
+      renderEstadoDeCuenta();
+      break;
 
     case 'confirmar-previsto':
       confirmandoPrevistoId = btn.dataset.id;
@@ -428,6 +550,7 @@ function onEstadoCuentaSubmit(e) {
     } else {
       agregarMovimiento(mesObj, { fecha, tipo, concepto, importe });
     }
+    formMovimientoAbierto = false;
     persistirYRenderizar();
   }
 
@@ -442,6 +565,7 @@ function onEstadoCuentaSubmit(e) {
     }
 
     agregarGastoPrevisto(mesObj, { concepto, importeEstimado, nota });
+    formPrevistoAbierto = false;
     persistirYRenderizar();
   }
 

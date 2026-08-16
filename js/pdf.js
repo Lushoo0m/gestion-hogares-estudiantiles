@@ -134,7 +134,9 @@ function generarPdfEstadoCuenta(hogar, mesObj) {
       y += 7;
     }
 
-    if (mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
+    // Los previstos solo son relevantes en el mes que está transcurriendo:
+    // un mes cerrado no los muestra, igual que en la app.
+    if (mesObj.estado === 'activo' && mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
       nuevaPaginaSiHaceFalta(10);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
