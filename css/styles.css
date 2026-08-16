@@ -1,11 +1,18 @@
 :root {
-  --azul: #1d4e6b;
-  --azul-claro: #eaf2f6;
-  --verde: #2f7a4f;
-  --rojo: #b3392c;
-  --gris-texto: #333;
-  --gris-borde: #d8dfe3;
-  --fondo: #f5f7f8;
+  --fondo: #10151a;
+  --superficie: #1a2129;
+  --superficie-alta: #212a33;
+  --borde: #2c3742;
+  --texto: #e8eef2;
+  --texto-secundario: #96a3ad;
+  --azul: #5aa9e6;
+  --azul-fuerte: #3d84c4;
+  --azul-tenue: rgba(90, 169, 230, 0.14);
+  --verde: #4cbd8c;
+  --rojo: #e2685c;
+  --amarillo: #d9a441;
+  --gris-bloqueado: #7c8894;
+  --gris-tenue: rgba(124, 136, 148, 0.16);
 }
 
 * {
@@ -16,14 +23,15 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--fondo);
-  color: var(--gris-texto);
+  color: var(--texto);
 }
 
 header {
-  background: var(--azul);
-  color: white;
+  background: #0b0f13;
+  color: var(--texto);
   padding: 1rem;
   text-align: center;
+  border-bottom: 1px solid var(--borde);
 }
 
 header h1 {
@@ -34,7 +42,7 @@ header h1 {
 header p {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
-  opacity: 0.85;
+  color: var(--texto-secundario);
 }
 
 main {
@@ -53,7 +61,7 @@ main {
   flex: 1;
   padding: 0.75rem;
   border: 1px solid var(--azul);
-  background: white;
+  background: var(--superficie);
   color: var(--azul);
   border-radius: 8px;
   font-size: 1rem;
@@ -62,10 +70,12 @@ main {
 }
 
 .tab--activo {
-  background: var(--azul);
-  color: white;
+  background: var(--azul-fuerte);
+  border-color: var(--azul-fuerte);
+  color: #fff;
 }
 
+/* Tira de meses del ciclo (jun-jul-ago-...-may) */
 #selector-meses {
   display: flex;
   flex-wrap: wrap;
@@ -73,28 +83,65 @@ main {
   margin-bottom: 1rem;
 }
 
-.chip {
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--gris-borde);
-  background: white;
+.chip-mes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  text-transform: capitalize;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto-secundario);
+  transition: background-color 0.2s ease, color 0.2s ease, padding 0.2s ease, border-color 0.2s ease;
 }
 
-.chip--activo {
-  background: var(--azul-claro);
+.chip-mes__codigo,
+.chip-mes__nombre {
+  white-space: nowrap;
+}
+
+.chip-mes--vacio {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.chip-mes--activo:not(.chip-mes--seleccionado) {
   border-color: var(--azul);
   color: var(--azul);
-  font-weight: 600;
+}
+
+.chip-mes--bloqueado:not(.chip-mes--seleccionado) {
+  border-color: var(--gris-bloqueado);
+  color: var(--gris-bloqueado);
+}
+
+.chip-mes--seleccionado {
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.chip-mes--seleccionado.chip-mes--activo {
+  background: var(--azul-fuerte);
+  border-color: var(--azul-fuerte);
+  color: #fff;
+}
+
+.chip-mes--seleccionado.chip-mes--bloqueado {
+  background: var(--gris-bloqueado);
+  border-color: var(--gris-bloqueado);
+  color: #10151a;
 }
 
 #estado-cuenta {
-  background: white;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
   border-radius: 10px;
   padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .estado-mes-header {
@@ -114,18 +161,18 @@ main {
 }
 
 .badge-activo {
-  background: #e6f4ea;
-  color: var(--verde);
+  background: var(--azul-tenue);
+  color: var(--azul);
 }
 
 .badge-cerrado {
-  background: #eceff1;
-  color: #555;
+  background: var(--gris-tenue);
+  color: var(--gris-bloqueado);
 }
 
 .btn-cerrar {
   border: 1px solid var(--rojo);
-  background: white;
+  background: transparent;
   color: var(--rojo);
   padding: 0.4rem 0.75rem;
   border-radius: 6px;
@@ -137,7 +184,7 @@ main {
 .btn-reabrir {
   border: none;
   background: none;
-  color: #777;
+  color: var(--texto-secundario);
   font-size: 0.8rem;
   text-decoration: underline;
   cursor: pointer;
@@ -154,7 +201,7 @@ main {
 .resumen .etiqueta {
   display: block;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--texto-secundario);
 }
 
 .resumen .valor {
@@ -165,8 +212,8 @@ main {
 }
 
 .ajuste {
-  background: #fdf3e7;
-  border-left: 3px solid #c9822a;
+  background: rgba(217, 164, 65, 0.12);
+  border-left: 3px solid var(--amarillo);
   padding: 0.5rem 0.75rem;
   margin: 0.5rem 0;
   font-size: 0.9rem;
@@ -174,20 +221,32 @@ main {
 }
 
 .recordatorio p {
-  background: #fff8e1;
-  border-left: 3px solid #d4a017;
+  background: rgba(217, 164, 65, 0.12);
+  border-left: 3px solid var(--amarillo);
   padding: 0.5rem 0.75rem;
   margin: 0.5rem 0;
   font-size: 0.9rem;
   border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .aviso,
 .aviso-vacio {
-  background: var(--azul-claro);
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.9rem;
+}
+
+.aviso--alerta {
+  background: rgba(226, 104, 92, 0.12);
+  border-color: var(--rojo);
+  color: #f2b8b1;
 }
 
 .tabla-movimientos {
@@ -197,10 +256,17 @@ main {
   font-size: 0.9rem;
 }
 
+.tabla-movimientos th {
+  color: var(--texto-secundario);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .tabla-movimientos th,
 .tabla-movimientos td {
   padding: 0.5rem;
-  border-bottom: 1px solid var(--gris-borde);
+  border-bottom: 1px solid var(--borde);
   text-align: left;
 }
 
@@ -222,11 +288,6 @@ main {
   margin-top: 0.75rem;
 }
 
-.previstos {
-  padding-left: 1.2rem;
-  font-size: 0.9rem;
-}
-
 .previstos .nota {
   color: var(--rojo);
   font-style: italic;
@@ -243,7 +304,7 @@ h4 {
   font-size: 0.9rem;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--texto-secundario);
 }
 
 .col-acciones {
@@ -274,7 +335,7 @@ h4 {
 }
 
 .fila-pendiente td {
-  background: #fdecea;
+  background: rgba(226, 104, 92, 0.1);
 }
 
 .marca-pendiente {
@@ -287,8 +348,8 @@ form {
   flex-direction: column;
   gap: 0.6rem;
   margin-top: 0.5rem;
-  background: #fafbfc;
-  border: 1px solid var(--gris-borde);
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
   border-radius: 8px;
   padding: 0.75rem;
 }
@@ -302,16 +363,19 @@ form label {
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.85rem;
-  color: #555;
+  color: var(--texto-secundario);
 }
 
 form input,
 form select {
   padding: 0.5rem;
-  border: 1px solid var(--gris-borde);
+  border: 1px solid var(--borde);
   border-radius: 6px;
   font-size: 1rem;
   font-family: inherit;
+  background: var(--fondo);
+  color: var(--texto);
+  color-scheme: dark;
 }
 
 .acciones-form {
@@ -323,16 +387,16 @@ form select {
   flex: 1;
   padding: 0.6rem;
   border-radius: 6px;
-  border: 1px solid var(--azul);
-  background: var(--azul);
-  color: white;
+  border: 1px solid var(--azul-fuerte);
+  background: var(--azul-fuerte);
+  color: #fff;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .acciones-form button[type="button"] {
-  background: white;
+  background: transparent;
   color: var(--azul);
 }
 
@@ -344,7 +408,7 @@ form select {
 
 .previstos li {
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--gris-borde);
+  border-bottom: 1px solid var(--borde);
 }
 
 .previsto-linea {
@@ -358,12 +422,4 @@ form select {
 .previsto-acciones {
   display: flex;
   gap: 0.75rem;
-}
-
-.recordatorio p {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }

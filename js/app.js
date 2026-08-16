@@ -45,23 +45,42 @@ function renderSelectorHogares() {
   });
 }
 
+// Tira fija de los 12 meses del ciclo (jun-jul-ago-...-may). Los meses sin
+// estado de cuenta creado todavía se muestran deshabilitados, sin inventar
+// datos. Al seleccionar un mes existente, su chip se expande con el nombre
+// completo y se colorea según esté activo (editable) o cerrado (solo lectura).
 function renderSelectorMeses() {
   const cont = document.getElementById('selector-meses');
   cont.innerHTML = '';
   const hogar = state.hogares[hogarSeleccionado];
-  const meses = getMesesOrdenados(hogar);
+  const ciclo = cicloMesesHogar(hogar);
 
-  if (!meses.length) {
+  if (!ciclo.length) {
     cont.innerHTML = '<p class="aviso">Este Hogar todavía no tiene meses cargados.</p>';
     return;
   }
 
-  meses.forEach((mesObj) => {
+  ciclo.forEach((mesKey) => {
+    const mesObj = hogar.meses[mesKey];
     const btn = document.createElement('button');
-    btn.className = 'chip' + (mesObj.mes === mesSeleccionado ? ' chip--activo' : '');
-    btn.textContent = `${mesLabel(mesObj.mes)}${mesObj.estado === 'cerrado' ? ' (cerrado)' : ''}`;
+
+    if (!mesObj) {
+      btn.className = 'chip-mes chip-mes--vacio';
+      btn.disabled = true;
+      btn.innerHTML = `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>`;
+      cont.appendChild(btn);
+      return;
+    }
+
+    const seleccionado = mesKey === mesSeleccionado;
+    const bloqueado = mesObj.estado === 'cerrado';
+    btn.className = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + (bloqueado ? ' chip-mes--bloqueado' : ' chip-mes--activo');
+    btn.innerHTML = seleccionado
+      ? `<span class="chip-mes__candado">${bloqueado ? '🔒' : '🔓'}</span><span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
+      : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span><span class="chip-mes__candado">${bloqueado ? '🔒' : '🔓'}</span>`;
+
     btn.addEventListener('click', () => {
-      mesSeleccionado = mesObj.mes;
+      mesSeleccionado = mesKey;
       editandoMovId = null;
       confirmandoPrevistoId = null;
       renderSelectorMeses();
@@ -151,6 +170,14 @@ function renderEstadoDeCuenta() {
 
   const movs = movimientosConSaldo(mesObj);
   const editable = mesObj.estado === 'activo';
+  const saldoCalculado = movs.length ? movs[movs.length - 1].saldo : 0;
+
+  if (mesObj.saldoFinalRegistrado !== undefined && !editable && saldoCalculado !== mesObj.saldoFinalRegistrado) {
+    html += `
+      <div class="aviso aviso--alerta">
+        <p>⚠️ El saldo calculado a partir de los movimientos (${formatMoney(saldoCalculado)}) no coincide con el saldo de cierre del documento original (${formatMoney(mesObj.saldoFinalRegistrado)}). Revisar antes de dar por bueno este mes.</p>
+      </div>`;
+  }
 
   html += `
     <table class="tabla-movimientos">
@@ -169,7 +196,7 @@ function renderEstadoDeCuenta() {
           </tr>`).join('')}
       </tbody>
     </table>
-    <p class="saldo-actual">Saldo actual: <strong>${formatMoney(movs.length ? movs[movs.length - 1].saldo : 0)}</strong></p>`;
+    <p class="saldo-actual">Saldo actual: <strong>${formatMoney(saldoCalculado)}</strong></p>`;
 
   if (editable) {
     const editando = editandoMovId ? mesObj.movimientos.find((m) => m.id === editandoMovId) : null;

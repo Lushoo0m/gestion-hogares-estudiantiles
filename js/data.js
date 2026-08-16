@@ -4,9 +4,10 @@
 
 const STORAGE_KEY = 'gh_estudiantiles_v1';
 
-// Datos históricos reales de Colonia, tal como fueron provistos. No se inventa
-// ningún importe, concepto ni fecha. Junio y julio están cerrados y solo se
-// conoce el resumen (presupuesto + saldo final), no el detalle de movimientos.
+// Datos históricos reales de Colonia, transcriptos tal cual figuran en los
+// PDF de cierre oficiales ("Estado de Cuenta Junio 2026 Definitivo" y
+// "...Julio 2026 Cierre"). No se inventa ningún importe, concepto ni fecha;
+// los saldos corrientes fueron verificados contra el saldo final de cada PDF.
 const SEED_STATE = {
   version: 1,
   hogares: {
@@ -29,8 +30,24 @@ const SEED_STATE = {
           presupuesto: 20000,
           presupuestoEfectivo: 20000,
           ajustes: [],
-          detalleDisponible: false,
-          movimientos: [],
+          detalleDisponible: true,
+          movimientos: [
+            { id: 'mov-jun-1', fecha: '2026-06-01', concepto: 'DEPÓSITO GESTIÓN', tipo: 'ingreso', importe: 20000 },
+            { id: 'mov-jun-2', fecha: '2026-06-01', concepto: 'BARRACA', tipo: 'gasto_real', importe: 990 },
+            { id: 'mov-jun-3', fecha: '2026-06-02', concepto: 'SANITARIA', tipo: 'gasto_real', importe: 305 },
+            { id: 'mov-jun-4', fecha: '2026-06-07', concepto: 'FERRETERÍA', tipo: 'gasto_real', importe: 390 },
+            { id: 'mov-jun-5', fecha: '2026-06-08', concepto: '2 RECARGAS DE GAS', tipo: 'gasto_real', importe: 2882 },
+            { id: 'mov-jun-6', fecha: '2026-06-08', concepto: 'REPUESTO LUZ', tipo: 'gasto_real', importe: 450 },
+            { id: 'mov-jun-7', fecha: '2026-06-08', concepto: 'BOLSAS RESIDUOS Y ESPONJAS', tipo: 'gasto_real', importe: 466 },
+            { id: 'mov-jun-8', fecha: '2026-06-08', concepto: 'ABONO SERVICIO BOMBAS', tipo: 'gasto_real', importe: 4819 },
+            { id: 'mov-jun-9', fecha: '2026-06-08', concepto: 'MESADA COCINA CHICA', tipo: 'gasto_real', importe: 2225 },
+            { id: 'mov-jun-10', fecha: '2026-06-10', concepto: 'ARREGLO LAVADORA', tipo: 'gasto_real', importe: 2196 },
+            { id: 'mov-jun-11', fecha: '2026-06-13', concepto: 'COMPRAS FERRETERÍA', tipo: 'gasto_real', importe: 465 },
+            { id: 'mov-jun-12', fecha: '2026-06-13', concepto: 'BOLSAS Y ESPONJAS', tipo: 'gasto_real', importe: 183 },
+            { id: 'mov-jun-13', fecha: '2026-06-18', concepto: 'ANTEL ADSL FIJO', tipo: 'gasto_real', importe: 1925 },
+            { id: 'mov-jun-14', fecha: '2026-06-18', concepto: 'PRODUCTOS DE LIMPIEZA - EL CLON', tipo: 'gasto_real', importe: 1924 },
+            { id: 'mov-jun-15', fecha: '2026-06-18', concepto: 'PRODUCTOS DE LIMPIEZA Y BOLSAS - EL CLON', tipo: 'gasto_real', importe: 777 },
+          ],
           saldoFinalRegistrado: 3,
           gastosPrevistos: [],
         },
@@ -40,8 +57,21 @@ const SEED_STATE = {
           presupuesto: 20000,
           presupuestoEfectivo: 20000,
           ajustes: [],
-          detalleDisponible: false,
-          movimientos: [],
+          detalleDisponible: true,
+          movimientos: [
+            { id: 'mov-jul-1', fecha: '2026-07-01', concepto: 'PRESUPUESTO MENSUAL', tipo: 'ingreso', importe: 20000 },
+            { id: 'mov-jul-2', fecha: '2026-07-01', concepto: 'Sello para encomiendas de estudiantes', tipo: 'gasto_real', importe: 390 },
+            { id: 'mov-jul-3', fecha: '2026-07-03', concepto: 'Envío de sobre - Rutas del Plata', tipo: 'gasto_real', importe: 100 },
+            { id: 'mov-jul-4', fecha: '2026-07-14', concepto: 'Sanitaria', tipo: 'gasto_real', importe: 790 },
+            { id: 'mov-jul-5', fecha: '2026-07-14', concepto: 'Abono sanitaria (gasto fijo mensual)', tipo: 'gasto_real', importe: 4819 },
+            { id: 'mov-jul-6', fecha: '2026-07-20', concepto: 'Antel ADSL', tipo: 'gasto_real', importe: 1925 },
+            { id: 'mov-jul-7', fecha: '2026-07-23', concepto: 'El Clon - Productos limpieza e higiene', tipo: 'gasto_real', importe: 1516 },
+            { id: 'mov-jul-8', fecha: '2026-07-27', concepto: 'Pintura antihongos para baños', tipo: 'gasto_real', importe: 1745 },
+            { id: 'mov-jul-9', fecha: '2026-07-28', concepto: 'Río Gas - Compra de envase', tipo: 'gasto_real', importe: 6362 },
+            { id: 'mov-jul-10', fecha: '2026-07-29', concepto: 'Envío de factura - Rutas del Plata', tipo: 'gasto_real', importe: 100 },
+            { id: 'mov-jul-11', fecha: '2026-07-29', concepto: 'Ropero - ML', tipo: 'gasto_real', importe: 1990 },
+            { id: 'mov-jul-12', fecha: '2026-07-30', concepto: 'Droguería Burgués - Productos de limpieza', tipo: 'gasto_real', importe: 255 },
+          ],
           saldoFinalRegistrado: 8,
           gastosPrevistos: [],
         },
@@ -254,4 +284,28 @@ function mesLabel(mesKey) {
   const [anio, mes] = mesKey.split('-');
   const nombres = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   return `${nombres[parseInt(mes, 10) - 1]} ${anio}`;
+}
+
+const MES_ABREV = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+// Etiqueta corta para el selector: "JUN26", "ENE27", etc.
+function mesAbrev(mesKey) {
+  const [anio, mes] = mesKey.split('-');
+  return `${MES_ABREV[parseInt(mes, 10) - 1]}${anio.slice(2)}`;
+}
+
+// El ciclo de un Hogar arranca en junio del año de su primer mes cargado y
+// recorre 12 meses (jun-jul-ago-...-may). Esto arma la tira completa del
+// selector aunque los meses futuros todavía no tengan estado de cuenta
+// creado — esos se muestran deshabilitados, nunca con datos inventados.
+function cicloMesesHogar(hogar) {
+  const clavesExistentes = Object.keys(hogar.meses).sort();
+  if (!clavesExistentes.length) return [];
+  const [anioPrimero, mesPrimero] = clavesExistentes[0].split('-').map(Number);
+  const anioInicio = mesPrimero >= 6 ? anioPrimero : anioPrimero - 1;
+  const secuencia = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
+  return secuencia.map((mesNum) => {
+    const anio = mesNum >= 6 ? anioInicio : anioInicio + 1;
+    return `${anio}-${String(mesNum).padStart(2, '0')}`;
+  });
 }
