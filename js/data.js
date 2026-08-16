@@ -22,6 +22,16 @@ const SEED_STATE = {
           importe: 4819,
           activo: true,
         },
+        // El importe real varía envío a envío (históricamente $100), así que
+        // el recordatorio solo prefiletea un valor de referencia: el importe
+        // real se confirma a mano contra el comprobante antes de registrar.
+        {
+          id: 'gf-colonia-envio-sobre',
+          concepto: 'Envío de sobre (Rutas del Plata / Núñez)',
+          importe: 100,
+          activo: true,
+          nota: 'El importe varía (aprox. $100 a $130): confirmar con el comprobante real.',
+        },
       ],
       meses: {
         '2026-06': {
@@ -130,7 +140,9 @@ function loadState() {
     saveState(state);
     return state;
   }
-  if (completarHistoricoDesdeSemilla(state)) saveState(state);
+  let huboCambios = completarHistoricoDesdeSemilla(state);
+  if (completarGastosFijosDesdeSemilla(state)) huboCambios = true;
+  if (huboCambios) saveState(state);
   return state;
 }
 
@@ -152,6 +164,28 @@ function completarHistoricoDesdeSemilla(state) {
       const mesGuardado = hogarGuardado.meses[mesKey];
       if (mesGuardado && !mesGuardado.detalleDisponible && mesSemilla.detalleDisponible) {
         hogarGuardado.meses[mesKey] = clone(mesSemilla);
+        cambio = true;
+      }
+    });
+  });
+  return cambio;
+}
+
+// Igual que completarHistoricoDesdeSemilla, pero para gastos fijos nuevos
+// que se agreguen al código (ej. el recordatorio de envío de sobre): si el
+// dispositivo ya tenía datos guardados y no conoce ese gasto fijo por id,
+// lo agrega. Nunca toca ni elimina gastos fijos que ya existan.
+function completarGastosFijosDesdeSemilla(state) {
+  let cambio = false;
+  Object.keys(SEED_STATE.hogares).forEach((hogarId) => {
+    const hogarSemilla = SEED_STATE.hogares[hogarId];
+    const hogarGuardado = state.hogares && state.hogares[hogarId];
+    if (!hogarGuardado) return;
+    hogarGuardado.gastosFijos = hogarGuardado.gastosFijos || [];
+    (hogarSemilla.gastosFijos || []).forEach((gfSemilla) => {
+      const yaExiste = hogarGuardado.gastosFijos.some((gf) => gf.id === gfSemilla.id);
+      if (!yaExiste) {
+        hogarGuardado.gastosFijos.push(clone(gfSemilla));
         cambio = true;
       }
     });
@@ -343,4 +377,31 @@ function cicloMesesHogar(hogar) {
     const anio = mesNum >= 6 ? anioInicio : anioInicio + 1;
     return `${anio}-${String(mesNum).padStart(2, '0')}`;
   });
+}
+
+// Respaldo completo (exportar/importar): un único archivo JSON con todo el
+// estado (todos los Hogares y meses), tal cual vive en localStorage. Es el
+// mecanismo de sincronización manual entre el celular y la PC.
+function nombreArchivoRespaldo() {
+  const hoy = new Date();
+  const iso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  return `Respaldo_Gestion_Hogares_${iso}.json`;
+}
+
+function descargarArchivo(nombreArchivo, contenido, tipoMime) {
+  const blob = new Blob([contenido], { type: tipoMime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Chequeo mínimo de que el archivo elegido para importar tiene la forma de
+// un respaldo de esta app, antes de reemplazar los datos del dispositivo.
+function esRespaldoValido(obj) {
+  return !!obj && typeof obj === 'object' && obj.hogares && typeof obj.hogares === 'object';
 }

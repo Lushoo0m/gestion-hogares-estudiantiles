@@ -20,6 +20,9 @@ let accionesMesExpandido = false;
 let confirmandoAccionMes = null; // 'cerrar' | 'reabrir' | null
 let indicadorExpandido = false;
 let indicadorTimer = null;
+let respaldoAbierto = null; // 'exportar' | 'importar' | null
+let archivoImportarTexto = null;
+let archivoImportarNombre = null;
 
 function init() {
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
@@ -29,9 +32,11 @@ function init() {
   renderSelectorHogares();
   renderSelectorMeses();
   renderEstadoDeCuenta();
+  renderRespaldo();
 
   document.getElementById('estado-cuenta').addEventListener('click', onEstadoCuentaClick);
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
+  document.getElementById('respaldo').addEventListener('click', onRespaldoClick);
 }
 
 function resetEstadosDeInteraccion() {
@@ -215,7 +220,7 @@ function renderEstadoDeCuenta() {
     html += '<div class="recordatorio">';
     gastosFijosPendientes.forEach((gf) => {
       html += `
-        <p>🔔 Recordatorio: gasto fijo mensual sin confirmar todavía — <strong>${gf.concepto}</strong> (${formatMoney(gf.importe)}).
+        <p>🔔 Recordatorio: gasto fijo mensual sin confirmar todavía — <strong>${gf.concepto}</strong> (${formatMoney(gf.importe)}).${gf.nota ? ` <em class="nota-gasto-fijo">${gf.nota}</em>` : ''}
           <button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${gf.id}">Registrar ahora</button>
         </p>`;
     });
@@ -316,12 +321,10 @@ function renderEstadoDeCuenta() {
       html += '<ul class="previstos">';
       mesObj.gastosPrevistos.forEach((p) => {
         html += `<li>
-          <div class="previsto-linea">
-            <span>${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</span>
-            <span class="previsto-acciones">
-              <button type="button" class="btn-link" data-action="confirmar-previsto" data-id="${p.id}">Confirmar como gasto real</button>
-              <button type="button" class="btn-link btn-link--rojo" data-action="eliminar-previsto" data-id="${p.id}">Eliminar</button>
-            </span>
+          <div class="previsto-mensaje">${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
+          <div class="previsto-acciones">
+            <button type="button" class="btn-confirmar-previsto" data-action="confirmar-previsto" data-id="${p.id}">✔ Confirmar gasto real</button>
+            <button type="button" class="btn-icono" data-action="eliminar-previsto" data-id="${p.id}" title="Eliminar">🗑️</button>
           </div>`;
         if (confirmandoPrevistoId === p.id) {
           html += `
@@ -585,6 +588,142 @@ function onEstadoCuentaSubmit(e) {
     confirmarGastoPrevisto(mesObj, form.dataset.previstoId, { fecha, importe });
     confirmandoPrevistoId = null;
     persistirYRenderizar();
+  }
+}
+
+// Exportar/Importar: red de seguridad manual entre dispositivos (el
+// celular es la fuente de la verdad del día a día; la PC recibe
+// importaciones cada tanto). Mismo lenguaje visual que el candado de
+// cerrar estado de cuenta: ícono simple que se despliega al tocarlo, y un
+// mensaje de confirmar/cancelar antes de ejecutar la acción, para evitar
+// que un toque accidental borre datos.
+function renderRespaldo() {
+  const cont = document.getElementById('respaldo');
+  if (!cont) return;
+  let html = '<div class="respaldo-caja">';
+
+  if (respaldoAbierto === 'exportar') {
+    html += `
+      <div class="confirmar-accion-mes">
+        <span>📤 ¿Descargar un respaldo completo (todos los Hogares y meses guardados en este dispositivo)?</span>
+        <button type="button" class="btn-confirmar" data-action="confirmar-exportar">Confirmar</button>
+        <button type="button" class="btn-cancelar" data-action="cancelar-respaldo">Cancelar</button>
+      </div>`;
+  } else if (respaldoAbierto === 'importar') {
+    if (archivoImportarNombre) {
+      html += `
+        <div class="confirmar-accion-mes">
+          <span>📥 ¿Reemplazar TODOS los datos guardados en este dispositivo por el contenido de "${archivoImportarNombre}"? Esta acción no se puede deshacer.</span>
+          <button type="button" class="btn-confirmar" data-action="confirmar-importar">Confirmar</button>
+          <button type="button" class="btn-cancelar" data-action="cancelar-respaldo">Cancelar</button>
+        </div>`;
+    } else {
+      html += `
+        <div class="respaldo-panel">
+          <span class="respaldo-panel__label">📥 Importar</span>
+          <label class="btn-pdf-mini respaldo-elegir-archivo">
+            Elegir archivo
+            <input type="file" id="input-importar-archivo" accept="application/json,.json" hidden>
+          </label>
+          <button type="button" class="btn-icono-mes" data-action="cancelar-respaldo" title="Cancelar">✕</button>
+        </div>`;
+    }
+  } else {
+    html += `
+      <button type="button" class="btn-respaldo-icono" data-action="abrir-exportar" title="Exportar respaldo">📤</button>
+      <button type="button" class="btn-respaldo-icono" data-action="abrir-importar" title="Importar respaldo">📥</button>`;
+  }
+
+  html += '</div>';
+  cont.innerHTML = html;
+
+  const inputArchivo = document.getElementById('input-importar-archivo');
+  if (inputArchivo) inputArchivo.addEventListener('change', onArchivoImportarSeleccionado);
+}
+
+function onArchivoImportarSeleccionado(e) {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+  const lector = new FileReader();
+  lector.onload = () => {
+    archivoImportarTexto = lector.result;
+    archivoImportarNombre = archivo.name;
+    renderRespaldo();
+  };
+  lector.onerror = () => {
+    alert('No se pudo leer el archivo elegido. Probá de nuevo.');
+  };
+  lector.readAsText(archivo);
+}
+
+function onRespaldoClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  switch (btn.dataset.action) {
+    case 'abrir-exportar':
+      respaldoAbierto = 'exportar';
+      renderRespaldo();
+      break;
+
+    case 'abrir-importar':
+      respaldoAbierto = 'importar';
+      archivoImportarTexto = null;
+      archivoImportarNombre = null;
+      renderRespaldo();
+      break;
+
+    case 'cancelar-respaldo':
+      respaldoAbierto = null;
+      archivoImportarTexto = null;
+      archivoImportarNombre = null;
+      renderRespaldo();
+      break;
+
+    case 'confirmar-exportar':
+      try {
+        descargarArchivo(nombreArchivoRespaldo(), JSON.stringify(state, null, 2), 'application/json');
+      } catch (err) {
+        console.error('Error al exportar el respaldo:', err);
+        alert('No se pudo generar el respaldo. Probá de nuevo.');
+      }
+      respaldoAbierto = null;
+      renderRespaldo();
+      break;
+
+    case 'confirmar-importar': {
+      let nuevoEstado;
+      try {
+        nuevoEstado = JSON.parse(archivoImportarTexto);
+      } catch (err) {
+        alert('El archivo elegido no es un JSON válido. No se importó nada.');
+        break;
+      }
+      if (!esRespaldoValido(nuevoEstado)) {
+        alert('El archivo elegido no tiene el formato de un respaldo de esta app. No se importó nada.');
+        break;
+      }
+
+      state = nuevoEstado;
+      saveState(state);
+      archivoImportarTexto = null;
+      archivoImportarNombre = null;
+      respaldoAbierto = null;
+
+      const hogaresDisponibles = getHogaresHabilitados(state);
+      hogarSeleccionado = hogaresDisponibles.length ? hogaresDisponibles[0].id : Object.keys(state.hogares)[0];
+      const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
+      const activo = meses.find((m) => m.estado === 'activo');
+      mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
+      resetEstadosDeInteraccion();
+
+      renderSelectorHogares();
+      renderSelectorMeses();
+      renderEstadoDeCuenta();
+      renderRespaldo();
+      alert('Importación completa: los datos de este dispositivo fueron reemplazados por el archivo elegido.');
+      break;
+    }
   }
 }
 

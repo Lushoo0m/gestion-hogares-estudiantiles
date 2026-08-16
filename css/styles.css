@@ -561,15 +561,79 @@ form select {
   border-bottom: 1px solid var(--borde);
 }
 
-.previsto-linea {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.previsto-mensaje {
+  margin-bottom: 0.5rem;
 }
 
 .previsto-acciones {
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.btn-confirmar-previsto {
+  border: 1px solid var(--verde);
+  background: rgba(76, 189, 140, 0.12);
+  color: var(--verde);
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nota-gasto-fijo {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--amarillo);
+  font-style: italic;
+  margin-top: 0.15rem;
+}
+
+/* Exportar / Importar: mismo lenguaje visual que el candado de cerrar
+   estado de cuenta. Íconos simples, se despliegan al tocarlos. */
+#respaldo {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--borde);
+}
+
+.respaldo-caja {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.btn-respaldo-icono {
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto);
+  font-size: 1.3rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  cursor: pointer;
+  margin: 0 0.5rem;
+}
+
+.respaldo-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  padding: 0.4rem 0.6rem;
+}
+
+.respaldo-panel__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+}
+
+.respaldo-elegir-archivo {
+  cursor: pointer;
 }
