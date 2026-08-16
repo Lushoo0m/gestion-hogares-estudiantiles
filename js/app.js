@@ -76,10 +76,13 @@ function renderSelectorMeses() {
 
     const seleccionado = mesKey === mesSeleccionado;
     const bloqueado = mesObj.estado === 'cerrado';
+    // El candado solo se muestra en los meses cerrados (bloqueados): un mes
+    // activo se ve "libre", sin candado, solo con su nombre.
+    const candado = bloqueado ? '<span class="chip-mes__candado">🔒</span>' : '';
     btn.className = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + (bloqueado ? ' chip-mes--bloqueado' : ' chip-mes--activo');
     btn.innerHTML = seleccionado
-      ? `<span class="chip-mes__candado">${bloqueado ? '🔒' : '🔓'}</span><span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
-      : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span><span class="chip-mes__candado">${bloqueado ? '🔒' : '🔓'}</span>`;
+      ? `${candado}<span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
+      : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>${candado}`;
 
     btn.addEventListener('click', () => {
       mesSeleccionado = mesKey;
@@ -127,13 +130,15 @@ function renderEstadoDeCuenta() {
   html += `<div class="estado-mes-header">
     <span class="badge-estado ${mesObj.estado === 'cerrado' ? 'badge-cerrado' : 'badge-activo'}">
       ${mesObj.estado === 'cerrado' ? '🔒 Cerrado — solo lectura' : '🟢 En curso'}
-    </span>`;
+    </span>
+    <div class="acciones-mes">
+      <button type="button" class="btn-pdf" data-action="descargar-pdf">📄 Descargar PDF</button>`;
   if (mesObj.estado === 'activo') {
     html += `<button type="button" class="btn-cerrar" data-action="cerrar-mes">🔒 Cerrar estado de cuenta</button>`;
   } else if (mesObj.detalleDisponible) {
     html += `<button type="button" class="btn-reabrir" data-action="reabrir-mes">Reabrir (corregir un error)</button>`;
   }
-  html += `</div>`;
+  html += `</div></div>`;
 
   html += `<div class="resumen">
     <div><span class="etiqueta">Presupuesto habitual</span><span class="valor">${formatMoney(mesObj.presupuesto)}</span></div>`;
@@ -304,6 +309,15 @@ function onEstadoCuentaClick(e) {
   const hogar = state.hogares[hogarSeleccionado];
 
   switch (btn.dataset.action) {
+    case 'descargar-pdf':
+      try {
+        generarPdfEstadoCuenta(hogar, mesObj);
+      } catch (err) {
+        console.error('Error al generar el PDF:', err);
+        alert('No se pudo generar el PDF. Probá de nuevo; si persiste, avisá.');
+      }
+      break;
+
     case 'cerrar-mes':
       if (confirm(`¿Cerrar el estado de cuenta de ${mesLabel(mesObj.mes)}? Después de cerrarlo va a quedar de solo lectura: no se van a poder agregar, editar ni eliminar gastos hasta reabrirlo.`)) {
         cerrarMes(mesObj);
