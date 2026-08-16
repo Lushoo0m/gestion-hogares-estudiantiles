@@ -308,6 +308,13 @@ function formatMoney(n) {
   return `${signo}$${Math.abs(Math.round(n)).toLocaleString('es-UY')}`;
 }
 
+// Fecha corta para la tabla en el celular: "01/08/26". La fecha completa
+// (con el año en 4 dígitos) es la que se usa en el PDF descargable.
+function fechaCorta(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio.slice(2)}`;
+}
+
 function mesLabel(mesKey) {
   const [anio, mes] = mesKey.split('-');
   const nombres = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

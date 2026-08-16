@@ -9,6 +9,7 @@ let hogarSeleccionado = 'colonia';
 let mesSeleccionado = null;
 let editandoMovId = null;
 let confirmandoPrevistoId = null;
+let conceptosExpandidos = new Set();
 
 function init() {
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
@@ -37,6 +38,7 @@ function renderSelectorHogares() {
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
       editandoMovId = null;
       confirmandoPrevistoId = null;
+      conceptosExpandidos.clear();
       renderSelectorHogares();
       renderSelectorMeses();
       renderEstadoDeCuenta();
@@ -83,6 +85,7 @@ function renderSelectorMeses() {
       mesSeleccionado = mesKey;
       editandoMovId = null;
       confirmandoPrevistoId = null;
+      conceptosExpandidos.clear();
       renderSelectorMeses();
       renderEstadoDeCuenta();
     });
@@ -181,21 +184,32 @@ function renderEstadoDeCuenta() {
 
   html += `
     <table class="tabla-movimientos">
+      <colgroup>
+        <col class="col-fecha">
+        <col class="col-concepto">
+        <col class="col-gasto">
+        <col class="col-saldo">
+        ${editable ? '<col class="col-acciones">' : ''}
+      </colgroup>
       <thead><tr><th>Fecha</th><th>Concepto</th><th>Gasto</th><th>Saldo</th>${editable ? '<th></th>' : ''}</tr></thead>
       <tbody>
-        ${movs.map((m) => `
+        ${movs.map((m) => {
+          const expandido = conceptosExpandidos.has(m.id);
+          return `
           <tr class="${m.tipo === 'ingreso' ? 'fila-ingreso' : ''}${m.pendienteAclaracion ? ' fila-pendiente' : ''}">
-            <td>${m.fecha.split('-').reverse().join('/')}</td>
-            <td>${m.concepto}${m.pendienteAclaracion ? ' <span class="marca-pendiente" title="Falta aclarar el concepto real">⚠️ aclarar</span>' : ''}</td>
+            <td>${fechaCorta(m.fecha)}</td>
+            <td class="celda-concepto${expandido ? ' celda-concepto--expandida' : ''}" data-action="toggle-concepto" data-id="${m.id}">${m.concepto}${m.pendienteAclaracion ? ' <span class="marca-pendiente" title="Falta aclarar el concepto real">⚠️</span>' : ''}</td>
             <td>${m.tipo === 'ingreso' ? '+' + formatMoney(m.importe) : formatMoney(m.importe)}</td>
             <td>${formatMoney(m.saldo)}</td>
-            ${editable ? `<td class="col-acciones">
+            ${editable ? `<td class="celda-acciones">
               <button type="button" class="btn-icono" data-action="editar-mov" data-id="${m.id}" title="Editar">✏️</button>
               <button type="button" class="btn-icono" data-action="eliminar-mov" data-id="${m.id}" title="Eliminar">🗑️</button>
             </td>` : ''}
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
+    <p class="ayuda-tabla">Tocá un concepto para ver el texto completo.</p>
     <p class="saldo-actual">Saldo actual: <strong>${formatMoney(saldoCalculado)}</strong></p>`;
 
   if (editable) {
@@ -304,6 +318,15 @@ function onEstadoCuentaClick(e) {
         reabrirMes(mesObj);
         persistirYRenderizar();
       }
+      break;
+
+    case 'toggle-concepto':
+      if (conceptosExpandidos.has(btn.dataset.id)) {
+        conceptosExpandidos.delete(btn.dataset.id);
+      } else {
+        conceptosExpandidos.add(btn.dataset.id);
+      }
+      renderEstadoDeCuenta();
       break;
 
     case 'editar-mov':

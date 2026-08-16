@@ -19,8 +19,14 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
+  overflow-x: hidden;
+  width: 100%;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--fondo);
   color: var(--texto);
@@ -251,23 +257,37 @@ main {
 
 .tabla-movimientos {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   margin-top: 0.75rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
+
+.col-fecha { width: 5.1em; }
+.col-gasto { width: 5.6em; }
+.col-saldo { width: 5.2em; }
+.col-acciones { width: 1.9em; }
+/* col-concepto no lleva ancho fijo: se queda con el espacio que sobra. */
 
 .tabla-movimientos th {
   color: var(--texto-secundario);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
 
 .tabla-movimientos th,
 .tabla-movimientos td {
-  padding: 0.5rem;
+  padding: 0.45rem 0.3rem;
   border-bottom: 1px solid var(--borde);
   text-align: left;
+  overflow: hidden;
+}
+
+.tabla-movimientos td:nth-child(1),
+.tabla-movimientos td:nth-child(3),
+.tabla-movimientos td:nth-child(4) {
+  white-space: nowrap;
 }
 
 .tabla-movimientos th:nth-child(3),
@@ -280,6 +300,30 @@ main {
 .fila-ingreso td {
   color: var(--verde);
   font-weight: 600;
+}
+
+/* Concepto: una sola línea con "..." al final; al tocarlo se expande y
+   muestra el texto completo, envuelto dentro del mismo ancho de columna. */
+.celda-concepto {
+  cursor: pointer;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  border-bottom: 1px dotted var(--texto-secundario);
+}
+
+.tabla-movimientos td.celda-concepto--expandida {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  border-bottom-style: solid;
+}
+
+.ayuda-tabla {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--texto-secundario);
+  text-align: center;
 }
 
 .saldo-actual {
@@ -307,17 +351,21 @@ h4 {
   color: var(--texto-secundario);
 }
 
-.col-acciones {
-  white-space: nowrap;
-  text-align: right !important;
+.celda-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.3rem 0 !important;
 }
 
 .btn-icono {
   border: none;
   background: none;
-  font-size: 1rem;
+  font-size: 0.9rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 0.15rem 0.3rem;
+  padding: 0.1rem;
 }
 
 .btn-link {
