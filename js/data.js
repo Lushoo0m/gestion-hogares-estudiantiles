@@ -121,14 +121,42 @@ function loadState() {
     saveState(seeded);
     return seeded;
   }
+  let state;
   try {
-    return JSON.parse(raw);
+    state = JSON.parse(raw);
   } catch (e) {
     console.error('Estado guardado corrupto, se reinicia con la semilla histórica.', e);
-    const seeded = clone(SEED_STATE);
-    saveState(seeded);
-    return seeded;
+    state = clone(SEED_STATE);
+    saveState(state);
+    return state;
   }
+  if (completarHistoricoDesdeSemilla(state)) saveState(state);
+  return state;
+}
+
+// El dispositivo guarda su propia copia del estado en localStorage, así que
+// una actualización de la app (por ejemplo, cargar el detalle real de un mes
+// que antes solo tenía el resumen) no llega sola a un dispositivo que ya
+// tenía datos guardados. Esta función completa esos meses automáticamente al
+// cargar, pero SOLO si el mes guardado todavía no tiene detalle propio
+// (detalleDisponible: false) — nunca pisa un mes que ya tiene movimientos,
+// así que jamás se pierde un gasto cargado a mano.
+function completarHistoricoDesdeSemilla(state) {
+  let cambio = false;
+  Object.keys(SEED_STATE.hogares).forEach((hogarId) => {
+    const hogarSemilla = SEED_STATE.hogares[hogarId];
+    const hogarGuardado = state.hogares && state.hogares[hogarId];
+    if (!hogarGuardado || !hogarGuardado.meses) return;
+    Object.keys(hogarSemilla.meses).forEach((mesKey) => {
+      const mesSemilla = hogarSemilla.meses[mesKey];
+      const mesGuardado = hogarGuardado.meses[mesKey];
+      if (mesGuardado && !mesGuardado.detalleDisponible && mesSemilla.detalleDisponible) {
+        hogarGuardado.meses[mesKey] = clone(mesSemilla);
+        cambio = true;
+      }
+    });
+  });
+  return cambio;
 }
 
 function saveState(state) {
