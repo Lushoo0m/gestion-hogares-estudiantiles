@@ -121,17 +121,19 @@ function renderSelectorMeses() {
     const mesKey = mesObj.mes;
     const seleccionado = mesKey === mesSeleccionado;
     const bloqueado = mesObj.estado === 'cerrado';
-    // El candado solo se muestra en los meses cerrados (bloqueados): un mes
-    // activo se ve "libre", sin candado, solo con su nombre.
-    const candado = bloqueado ? '<span class="chip-mes__candado">🔒</span>' : '';
-    const clase = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + (bloqueado ? ' chip-mes--bloqueado' : ' chip-mes--activo');
+    const preparado = mesObj.estado === 'preparado';
+    // El candado solo se muestra en los meses cerrados; el reloj de arena en
+    // el mes preparado (esperando su turno); el mes activo se ve "libre".
+    const icono = bloqueado ? '<span class="chip-mes__candado">🔒</span>' : preparado ? '<span class="chip-mes__candado">⏳</span>' : '';
+    const modificador = bloqueado ? ' chip-mes--bloqueado' : preparado ? ' chip-mes--preparado' : ' chip-mes--activo';
+    const clase = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + modificador;
     const contenido = seleccionado
-      ? `${candado}<span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
-      : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>${candado}`;
+      ? `${icono}<span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
+      : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>${icono}`;
     html += `<button type="button" class="${clase}" data-action="seleccionar-mes" data-mes="${mesKey}">${contenido}</button>`;
   });
 
-  const proximo = proximoMesCreable(hogar);
+  const proximo = puedeCrearMesSiguiente(hogar) ? proximoMesCreable(hogar) : null;
   if (proximo) {
     if (formNuevoMesAbierto) {
       html += `
@@ -214,13 +216,14 @@ function persistirYRenderizar() {
 // despliegue es momentáneo (muestra "En curso" un par de segundos y
 // vuelve solo al punto); en el mes cerrado el despliegue queda fijo hasta
 // tocar de nuevo, y ahí aparecen el PDF y el lápiz para reabrir.
-function renderEncabezadoMes(mesObj) {
+function renderEncabezadoMes(mesObj, hogar) {
   let html = '<div class="estado-mes-header">';
 
   if (confirmandoAccionMes) {
     const esCerrar = confirmandoAccionMes === 'cerrar';
+    const preparado = esCerrar ? mesSiguientePreparado(hogar) : null;
     const pregunta = esCerrar
-      ? '¿Cerrar este estado de cuenta? Va a quedar de solo lectura y se descartan las alertas del mes (no forman parte del historial).'
+      ? `¿Cerrar este estado de cuenta? Va a quedar de solo lectura y se descartan las alertas del mes (no forman parte del historial).${preparado ? ` ${mesLabel(preparado.mes)} pasa a ser el mes en curso.` : ''}`
       : '¿Reabrir para corregir un error?';
     html += `
       <div class="confirmar-accion-mes">
@@ -241,6 +244,12 @@ function renderEncabezadoMes(mesObj) {
       <div class="acciones-mes-mini">
         <button type="button" class="btn-pdf-mini" data-action="descargar-pdf">📄 PDF</button>
         <button type="button" class="btn-icono-mes" data-action="pedir-cerrar-mes" title="Cerrar estado de cuenta">🔒</button>
+      </div>`;
+  } else if (mesObj.estado === 'preparado') {
+    html += `
+      <span class="indicador-preparado" title="Preparado: pasa a ser el mes en curso cuando se cierre el actual">⏳ Preparado</span>
+      <div class="acciones-mes-mini">
+        <button type="button" class="btn-pdf-mini" data-action="descargar-pdf">📄 PDF</button>
       </div>`;
   } else {
     html += `<button type="button" class="indicador-cerrado" data-action="toggle-acciones-mes" title="Mes cerrado, solo lectura">🔒</button>`;
@@ -441,7 +450,7 @@ function renderEstadoDeCuenta() {
   const movs = mesObj.detalleDisponible ? movimientosConSaldo(mesObj) : [];
   const saldoCalculado = mesObj.detalleDisponible ? (movs.length ? movs[movs.length - 1].saldo : 0) : undefined;
 
-  let html = renderEncabezadoMes(mesObj);
+  let html = renderEncabezadoMes(mesObj, hogar);
 
   const movIngreso = mesObj.detalleDisponible ? mesObj.movimientos.find((m) => m.tipo === 'ingreso') : null;
   html += renderTarjetaPresupuesto(movIngreso, editable);
@@ -631,9 +640,11 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
-    case 'confirmar-accion-mes':
+    case 'confirmar-accion-mes': {
+      let mesPromovido = null;
       if (confirmandoAccionMes === 'cerrar') {
-        cerrarMes(mesObj);
+        mesPromovido = mesSiguientePreparado(hogar);
+        cerrarMes(mesObj, hogar);
       } else if (confirmandoAccionMes === 'reabrir') {
         reabrirMes(mesObj);
       }
@@ -642,8 +653,15 @@ function onEstadoCuentaClick(e) {
       editandoMovId = null;
       formMovimientoAbierto = false;
       confirmandoPrevistoId = null;
+      if (mesPromovido) {
+        // El mes preparado pasa a ser el mes en curso: saltamos a verlo.
+        mesSeleccionado = mesPromovido.mes;
+        prepararMesActivo();
+      }
       persistirYRenderizar();
+      renderSelectorMeses();
       break;
+    }
 
     case 'toggle-concepto':
       if (conceptosExpandidos.has(btn.dataset.id)) {

@@ -335,11 +335,25 @@ function confirmarGastoPrevisto(mesObj, id, { fecha, importe }) {
 // Las alertas personalizadas son operativas del mes en curso, no forman
 // parte del historial: al cerrar el mes se descartan (el resto de los
 // datos —movimientos, saldo, previstos ya confirmados— sí quedan).
-function cerrarMes(mesObj) {
+//
+// Si había un mes "preparado" (creado de antemano con el próximo
+// presupuesto, esperando su turno), al cerrar el mes en curso ese mes
+// preparado pasa a ser el nuevo mes activo — solo puede haber uno en
+// curso por vez.
+function cerrarMes(mesObj, hogar) {
   mesObj.estado = 'cerrado';
   mesObj.alertasPersonalizadas = [];
   mesObj.historialEstado = mesObj.historialEstado || [];
   mesObj.historialEstado.push({ accion: 'cierre', fecha: new Date().toISOString() });
+
+  if (hogar) {
+    const preparado = mesSiguientePreparado(hogar);
+    if (preparado) {
+      preparado.estado = 'activo';
+      preparado.historialEstado = preparado.historialEstado || [];
+      preparado.historialEstado.push({ accion: 'inicio', fecha: new Date().toISOString() });
+    }
+  }
 }
 
 function reabrirMes(mesObj) {
@@ -407,9 +421,33 @@ function proximoMesCreable(hogar) {
   return `${siguienteAnio}-${String(siguienteMes).padStart(2, '0')}`;
 }
 
+// Solo puede haber un mes "preparado" por vez (el que espera su turno para
+// convertirse en el mes en curso cuando se cierre el actual).
+function mesSiguientePreparado(hogar) {
+  return Object.values(hogar.meses).find((m) => m.estado === 'preparado') || null;
+}
+
+function hayMesActivo(hogar) {
+  return Object.values(hogar.meses).some((m) => m.estado === 'activo');
+}
+
+// El "+" para crear el mes siguiente solo se ofrece si hay un casillero
+// libre Y todavía no hay un mes preparado esperando turno — así nunca se
+// puede tener más de un mes por delante del que está en curso.
+function puedeCrearMesSiguiente(hogar) {
+  return !!proximoMesCreable(hogar) && !mesSiguientePreparado(hogar);
+}
+
 // Crea el estado de cuenta de un mes nuevo, con el presupuesto que cargue
 // el usuario como único movimiento inicial (ingreso, fechado el día 1).
 // Nunca se inventa un importe: lo pone la persona en el momento de crearlo.
+//
+// Si ya hay un mes en curso, este nuevo mes queda "preparado": solo tiene
+// el presupuesto cargado, sin ninguna otra acción disponible (nada de
+// agregar gastos, previstos ni alertas) hasta que el mes en curso se
+// cierre y este pase a ser el nuevo activo. Si no hay ningún mes en curso
+// (por ejemplo, se cerró el anterior sin preparar este), arranca activo
+// directamente.
 function crearMesNuevo(hogar, mesKey, presupuestoInicial) {
   const importe = Math.round(Number(presupuestoInicial));
   const movimientoInicial = {
@@ -421,7 +459,7 @@ function crearMesNuevo(hogar, mesKey, presupuestoInicial) {
   };
   const mesNuevo = {
     mes: mesKey,
-    estado: 'activo',
+    estado: hayMesActivo(hogar) ? 'preparado' : 'activo',
     presupuesto: importe,
     presupuestoEfectivo: importe,
     ajustes: [],

@@ -157,6 +157,11 @@ main {
   color: var(--gris-bloqueado);
 }
 
+.chip-mes--preparado:not(.chip-mes--seleccionado) {
+  border-color: var(--amarillo);
+  color: var(--amarillo);
+}
+
 .chip-mes--seleccionado {
   padding: 0.55rem 1rem;
   font-size: 0.85rem;
@@ -172,6 +177,12 @@ main {
 .chip-mes--seleccionado.chip-mes--bloqueado {
   background: var(--gris-bloqueado);
   border-color: var(--gris-bloqueado);
+  color: #10151a;
+}
+
+.chip-mes--seleccionado.chip-mes--preparado {
+  background: var(--amarillo);
+  border-color: var(--amarillo);
   color: #10151a;
 }
 
