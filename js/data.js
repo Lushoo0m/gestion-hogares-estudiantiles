@@ -15,24 +15,22 @@ const SEED_STATE = {
       id: 'colonia',
       nombre: 'Colonia',
       habilitado: true,
-      gastosFijos: [
-        {
-          id: 'gf-colonia-bombas',
-          concepto: 'Abono servicio bombas/sanitaria',
-          importe: 4819,
-          activo: true,
-        },
-      ],
-      // A diferencia de un gasto fijo (importe exacto conocido, como
-      // bombas), estos son recurrentes pero de importe variable — por eso
-      // se sugieren como gasto PREVISTO de cada mes activo (no como
-      // alerta): el importe se confirma a mano contra el comprobante real.
+      gastosFijos: [],
+      // Gastos recurrentes de cada mes: se sugieren como gasto PREVISTO del
+      // mes activo (no como recordatorio aparte), y el importe se confirma
+      // a mano contra el comprobante real antes de pasar a ser un gasto.
       previstosRecurrentes: [
         {
           id: 'pr-colonia-envio-sobre',
           concepto: 'Envío de sobre (Rutas del Plata / Núñez)',
           importeEstimado: 100,
           nota: 'El importe varía (aprox. $100 a $130): confirmar con el comprobante real.',
+        },
+        {
+          id: 'pr-colonia-bombas',
+          concepto: 'Abono servicio bombas / sanitaria',
+          importeEstimado: 4819,
+          nota: '',
         },
       ],
       meses: {
@@ -146,18 +144,20 @@ function loadState() {
     return state;
   }
   let huboCambios = completarHistoricoDesdeSemilla(state);
-  if (completarGastosFijosDesdeSemilla(state)) huboCambios = true;
   if (quitarGastosFijosObsoletos(state)) huboCambios = true;
+  if (completarPrevistosRecurrentesDesdeSemilla(state)) huboCambios = true;
+  if (corregirMesesActivosDuplicados(state)) huboCambios = true;
   if (huboCambios) saveState(state);
   return state;
 }
 
 // Ids de gastos fijos que existieron en versiones anteriores de la app y
-// se dieron de baja (ej. "envío de sobre" pasó a sugerirse como gasto
-// previsto en vez de aparecer como recordatorio fijo). Se quitan de los
-// dispositivos que ya los tenían guardados; no afecta ningún movimiento ni
-// previsto real, solo esta configuración de recordatorios.
-const GASTOS_FIJOS_OBSOLETOS = ['gf-colonia-envio-sobre'];
+// se dieron de baja (ej. "envío de sobre" y "bombas/sanitaria" pasaron a
+// sugerirse como gasto previsto en vez de aparecer como recordatorio fijo
+// con campana). Se quitan de los dispositivos que ya los tenían guardados;
+// no afecta ningún movimiento ni previsto real, solo esta configuración de
+// recordatorios.
+const GASTOS_FIJOS_OBSOLETOS = ['gf-colonia-envio-sobre', 'gf-colonia-bombas'];
 
 function quitarGastosFijosObsoletos(state) {
   let cambio = false;
@@ -195,21 +195,50 @@ function completarHistoricoDesdeSemilla(state) {
   return cambio;
 }
 
-// Igual que completarHistoricoDesdeSemilla, pero para gastos fijos nuevos
-// que se agreguen al código (ej. el recordatorio de envío de sobre): si el
-// dispositivo ya tenía datos guardados y no conoce ese gasto fijo por id,
-// lo agrega. Nunca toca ni elimina gastos fijos que ya existan.
-function completarGastosFijosDesdeSemilla(state) {
+// Igual que completarHistoricoDesdeSemilla, pero para previstos recurrentes
+// nuevos que se agreguen al código (ej. el abono de bombas/sanitaria, que
+// pasó de recordatorio fijo con campana a sugerirse como gasto previsto):
+// si el dispositivo ya tenía datos guardados y no conoce ese previsto
+// recurrente por id, lo agrega. Nunca toca ni elimina previstos
+// recurrentes que ya existan.
+function completarPrevistosRecurrentesDesdeSemilla(state) {
   let cambio = false;
   Object.keys(SEED_STATE.hogares).forEach((hogarId) => {
     const hogarSemilla = SEED_STATE.hogares[hogarId];
     const hogarGuardado = state.hogares && state.hogares[hogarId];
     if (!hogarGuardado) return;
-    hogarGuardado.gastosFijos = hogarGuardado.gastosFijos || [];
-    (hogarSemilla.gastosFijos || []).forEach((gfSemilla) => {
-      const yaExiste = hogarGuardado.gastosFijos.some((gf) => gf.id === gfSemilla.id);
+    hogarGuardado.previstosRecurrentes = hogarGuardado.previstosRecurrentes || [];
+    (hogarSemilla.previstosRecurrentes || []).forEach((prSemilla) => {
+      const yaExiste = hogarGuardado.previstosRecurrentes.some((pr) => pr.id === prSemilla.id);
       if (!yaExiste) {
-        hogarGuardado.gastosFijos.push(clone(gfSemilla));
+        hogarGuardado.previstosRecurrentes.push(clone(prSemilla));
+        cambio = true;
+      }
+    });
+  });
+  return cambio;
+}
+
+// Antes de que existiera el estado "preparado", un error dejaba crear más
+// de un mes "activo" a la vez para el mismo Hogar. Este ajuste corrige, una
+// sola vez, los dispositivos que ya tenían quedado ese error: se conserva
+// como activo el más antiguo (el que realmente estaba en curso) y se
+// elimina cualquier mes "activo" posterior que todavía no tenga ningún
+// gasto cargado (solo el presupuesto inicial) — nunca se toca un mes que
+// ya tenga movimientos o previstos propios, para no perder nada real.
+function corregirMesesActivosDuplicados(state) {
+  let cambio = false;
+  Object.values(state.hogares || {}).forEach((hogar) => {
+    if (!hogar.meses) return;
+    const activos = Object.values(hogar.meses)
+      .filter((m) => m.estado === 'activo')
+      .sort((a, b) => a.mes.localeCompare(b.mes));
+    if (activos.length <= 1) return;
+    activos.slice(1).forEach((mesExtra) => {
+      const sinGastosCargados =
+        mesExtra.movimientos.length <= 1 && (mesExtra.gastosPrevistos || []).length === 0;
+      if (sinGastosCargados) {
+        delete hogar.meses[mesExtra.mes];
         cambio = true;
       }
     });
@@ -470,6 +499,17 @@ function crearMesNuevo(hogar, mesKey, presupuestoInicial) {
   };
   hogar.meses[mesKey] = mesNuevo;
   return mesNuevo;
+}
+
+// Un mes "preparado" todavía no es un estado de cuenta real: solo tiene el
+// presupuesto inicial cargado y ninguna otra acción estuvo disponible para
+// tocarlo, así que se puede borrar sin dejar rastro ni perder nada. Solo
+// actúa sobre un mes que efectivamente esté en ese estado.
+function eliminarMesPreparado(hogar, mesKey) {
+  const mesObj = hogar.meses[mesKey];
+  if (!mesObj || mesObj.estado !== 'preparado') return false;
+  delete hogar.meses[mesKey];
+  return true;
 }
 
 // Respaldo completo (exportar/importar): un único archivo JSON con todo el

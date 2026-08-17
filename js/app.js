@@ -17,14 +17,13 @@ let conceptosExpandidos = new Set();
 let formMovimientoAbierto = false;
 let formPrevistoAbierto = false;
 let accionesMesExpandido = false;
-let confirmandoAccionMes = null; // 'cerrar' | 'reabrir' | null
+let confirmandoAccionMes = null; // 'cerrar' | 'reabrir' | 'eliminar-preparado' | null
 let indicadorExpandido = false;
 let indicadorTimer = null;
 let respaldoAbierto = null; // 'exportar' | 'importar' | null
 let archivoImportarTexto = null;
 let archivoImportarNombre = null;
-let avisoAbiertoId = null; // id del recordatorio de gasto fijo desplegado (uno solo a la vez)
-let avisosDescartados = new Set(); // ids de avisos/alertas de sistema deslizados en esta vista
+let avisosDescartados = new Set(); // ids de alertas de sistema deslizadas en esta vista
 let swipeEstado = null; // seguimiento del gesto de deslizar en curso
 let alertasPanelAbierto = false; // panel de Alertas (campana con contador)
 let formAlertaAbierto = false; // burbuja "+ Agregar alerta" dentro del panel
@@ -65,7 +64,6 @@ function resetEstadosDeInteraccion() {
   accionesMesExpandido = false;
   confirmandoAccionMes = null;
   indicadorExpandido = false;
-  avisoAbiertoId = null;
   avisosDescartados.clear();
   alertasPanelAbierto = false;
   formAlertaAbierto = false;
@@ -215,20 +213,28 @@ function persistirYRenderizar() {
 // candado = cerrado) que se despliega al tocarlo. En el mes activo el
 // despliegue es momentáneo (muestra "En curso" un par de segundos y
 // vuelve solo al punto); en el mes cerrado el despliegue queda fijo hasta
-// tocar de nuevo, y ahí aparecen el PDF y el lápiz para reabrir.
+// tocar de nuevo, y ahí aparecen el PDF y el lápiz para reabrir. El mes
+// "preparado" nunca muestra nada de eso (ni "en curso", ni PDF, ni cerrar):
+// solo la etiqueta de estado y un cesto para eliminarlo si hace falta.
 function renderEncabezadoMes(mesObj, hogar) {
   let html = '<div class="estado-mes-header">';
 
   if (confirmandoAccionMes) {
     const esCerrar = confirmandoAccionMes === 'cerrar';
+    const esEliminarPreparado = confirmandoAccionMes === 'eliminar-preparado';
     const preparado = esCerrar ? mesSiguientePreparado(hogar) : null;
-    const pregunta = esCerrar
-      ? `¿Cerrar este estado de cuenta? Va a quedar de solo lectura y se descartan las alertas del mes (no forman parte del historial).${preparado ? ` ${mesLabel(preparado.mes)} pasa a ser el mes en curso.` : ''}`
-      : '¿Reabrir para corregir un error?';
+    let pregunta;
+    if (esCerrar) {
+      pregunta = `¿Cerrar este estado de cuenta? Va a quedar de solo lectura y se descartan las alertas del mes (no forman parte del historial).${preparado ? ` ${mesLabel(preparado.mes)} pasa a ser el mes en curso.` : ''}`;
+    } else if (esEliminarPreparado) {
+      pregunta = `¿Eliminar ${mesLabel(mesObj.mes)}? Todavía no está en curso, no tiene ningún gasto cargado que perder. Se puede volver a preparar un mes cuando haga falta.`;
+    } else {
+      pregunta = '¿Reabrir para corregir un error?';
+    }
     html += `
       <div class="confirmar-accion-mes">
         <span>${pregunta}</span>
-        <button type="button" class="btn-confirmar${esCerrar ? '' : ' btn-confirmar--azul'}" data-action="confirmar-accion-mes">Confirmar</button>
+        <button type="button" class="btn-confirmar${!esCerrar && !esEliminarPreparado ? ' btn-confirmar--azul' : ''}" data-action="confirmar-accion-mes">Confirmar</button>
         <button type="button" class="btn-cancelar" data-action="cancelar-accion-mes">Cancelar</button>
       </div>`;
     html += '</div>';
@@ -247,9 +253,9 @@ function renderEncabezadoMes(mesObj, hogar) {
       </div>`;
   } else if (mesObj.estado === 'preparado') {
     html += `
-      <span class="indicador-preparado" title="Preparado: pasa a ser el mes en curso cuando se cierre el actual">⏳ Preparado</span>
+      <span class="indicador-preparado" title="Preparación: todavía no es el mes en curso">⏳ Preparación</span>
       <div class="acciones-mes-mini">
-        <button type="button" class="btn-pdf-mini" data-action="descargar-pdf">📄 PDF</button>
+        <button type="button" class="btn-icono-mes btn-icono-mes--eliminar" data-action="pedir-eliminar-mes-preparado" title="Eliminar mes preparado">🗑️</button>
       </div>`;
   } else {
     html += `<button type="button" class="indicador-cerrado" data-action="toggle-acciones-mes" title="Mes cerrado, solo lectura">🔒</button>`;
@@ -263,39 +269,6 @@ function renderEncabezadoMes(mesObj, hogar) {
   }
 
   html += '</div>';
-  return html;
-}
-
-// Recordatorio de gasto fijo pendiente (solo bombas/sanitaria: el envío de
-// sobre ahora se sugiere como gasto previsto, no como recordatorio). Solo
-// ícono por defecto; tocarlo despliega el mensaje con la acción
-// "Registrar ahora" (es la única de estas notificaciones que tiene una
-// acción real). Deslizar hacia la derecha lo descarta de esta vista.
-function renderRecordatorioFijo(gastosFijosPendientes) {
-  if (!gastosFijosPendientes.length) return '';
-
-  let html = '<div class="avisos-iconos">';
-  gastosFijosPendientes.forEach((gf) => {
-    const id = `recordatorio-${gf.id}`;
-    if (avisosDescartados.has(id)) return;
-    const activo = id === avisoAbiertoId;
-    html += `<button type="button" class="btn-aviso-icono${activo ? ' btn-aviso-icono--activo' : ''}" data-action="toggle-aviso" data-aviso-id="${id}" title="Recordatorio">🔔</button>`;
-  });
-  html += '</div>';
-
-  const gf = gastosFijosPendientes.find((g) => `recordatorio-${g.id}` === avisoAbiertoId);
-  if (gf && !avisosDescartados.has(avisoAbiertoId)) {
-    const mensaje = `Gasto fijo mensual sin confirmar todavía — ${gf.concepto} (${formatMoney(gf.importe)}).${gf.nota ? ` ${gf.nota}` : ''}`;
-    html += `
-      <div class="aviso-swipe" data-aviso-id="${avisoAbiertoId}" data-tipo="sistema">
-        <div class="aviso-swipe__fondo">🗑️ Deslizar para descartar</div>
-        <div class="aviso-swipe__frente">
-          <span>🔔 ${mensaje}</span>
-          <button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${gf.id}">Registrar ahora</button>
-        </div>
-      </div>`;
-  }
-
   return html;
 }
 
@@ -439,14 +412,6 @@ function renderEstadoDeCuenta() {
   }
 
   const editable = mesObj.estado === 'activo';
-  const normalizarConcepto = (s) => s.toLowerCase().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/').trim();
-  // El recordatorio de gasto fijo, igual que las alertas, es operativo del
-  // mes en curso: no tiene sentido (ni aparece) en un mes cerrado.
-  const gastosFijosPendientes = editable
-    ? (hogar.gastosFijos || []).filter(
-        (gf) => gf.activo && !mesObj.movimientos.some((m) => normalizarConcepto(m.concepto) === normalizarConcepto(gf.concepto))
-      )
-    : [];
   const movs = mesObj.detalleDisponible ? movimientosConSaldo(mesObj) : [];
   const saldoCalculado = mesObj.detalleDisponible ? (movs.length ? movs[movs.length - 1].saldo : 0) : undefined;
 
@@ -455,7 +420,6 @@ function renderEstadoDeCuenta() {
   const movIngreso = mesObj.detalleDisponible ? mesObj.movimientos.find((m) => m.tipo === 'ingreso') : null;
   html += renderTarjetaPresupuesto(movIngreso, editable);
 
-  html += renderRecordatorioFijo(gastosFijosPendientes);
   html += renderAlertas(mesObj, saldoCalculado);
 
   if (!mesObj.detalleDisponible) {
@@ -635,6 +599,11 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
+    case 'pedir-eliminar-mes-preparado':
+      confirmandoAccionMes = 'eliminar-preparado';
+      renderEstadoDeCuenta();
+      break;
+
     case 'cancelar-accion-mes':
       confirmandoAccionMes = null;
       renderEstadoDeCuenta();
@@ -642,11 +611,14 @@ function onEstadoCuentaClick(e) {
 
     case 'confirmar-accion-mes': {
       let mesPromovido = null;
+      let mesEliminado = false;
       if (confirmandoAccionMes === 'cerrar') {
         mesPromovido = mesSiguientePreparado(hogar);
         cerrarMes(mesObj, hogar);
       } else if (confirmandoAccionMes === 'reabrir') {
         reabrirMes(mesObj);
+      } else if (confirmandoAccionMes === 'eliminar-preparado') {
+        mesEliminado = eliminarMesPreparado(hogar, mesObj.mes);
       }
       confirmandoAccionMes = null;
       accionesMesExpandido = false;
@@ -657,6 +629,11 @@ function onEstadoCuentaClick(e) {
         // El mes preparado pasa a ser el mes en curso: saltamos a verlo.
         mesSeleccionado = mesPromovido.mes;
         prepararMesActivo();
+      } else if (mesEliminado) {
+        // El mes preparado que se estaba viendo ya no existe: volvemos al
+        // mes activo (el "+" para preparar otro reaparece solo).
+        const activo = Object.values(hogar.meses).find((m) => m.estado === 'activo');
+        mesSeleccionado = activo ? activo.mes : null;
       }
       persistirYRenderizar();
       renderSelectorMeses();
@@ -669,11 +646,6 @@ function onEstadoCuentaClick(e) {
       } else {
         conceptosExpandidos.add(btn.dataset.id);
       }
-      renderEstadoDeCuenta();
-      break;
-
-    case 'toggle-aviso':
-      avisoAbiertoId = avisoAbiertoId === btn.dataset.avisoId ? null : btn.dataset.avisoId;
       renderEstadoDeCuenta();
       break;
 
@@ -736,22 +708,6 @@ function onEstadoCuentaClick(e) {
           formMovimientoAbierto = false;
         }
         persistirYRenderizar();
-      }
-      break;
-    }
-
-    case 'registrar-fijo': {
-      const gf = hogar.gastosFijos.find((g) => g.id === btn.dataset.gfId);
-      if (!gf) break;
-      editandoMovId = null;
-      formMovimientoAbierto = true;
-      avisoAbiertoId = null;
-      renderEstadoDeCuenta();
-      const form = document.getElementById('form-movimiento');
-      if (form) {
-        form.concepto.value = gf.concepto;
-        form.importe.value = gf.importe;
-        form.fecha.focus();
       }
       break;
     }
@@ -1018,10 +974,9 @@ function onRespaldoClick(e) {
   }
 }
 
-// Gesto de deslizar hacia la derecha para descartar un aviso/recordatorio
-// desplegado. No se arma el "modo arrastre" hasta que el movimiento sea
-// claramente horizontal, así un toque simple (por ejemplo, en el botón
-// "Registrar ahora") sigue funcionando como un click normal.
+// Gesto de deslizar hacia la derecha para descartar una alerta. No se arma
+// el "modo arrastre" hasta que el movimiento sea claramente horizontal, así
+// un toque simple sobre la alerta sigue funcionando como un click normal.
 const UMBRAL_SWIPE_DESCARTAR = 70;
 
 function onAvisoPointerDown(e) {
@@ -1083,11 +1038,10 @@ function onAvisoPointerUp(e) {
           saveState(state);
         }
       } else {
-        // Es una notificación del sistema (recordatorio/alerta calculada):
-        // deslizar solo la oculta de esta vista, no borra ningún dato.
+        // Es una alerta del sistema (calculada): deslizar solo la oculta
+        // de esta vista, no borra ningún dato.
         avisosDescartados.add(id);
       }
-      if (avisoAbiertoId === id) avisoAbiertoId = null;
       renderEstadoDeCuenta();
     } else {
       elFrente.style.transform = 'translateX(0)';

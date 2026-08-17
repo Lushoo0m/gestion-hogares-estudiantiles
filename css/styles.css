@@ -269,6 +269,26 @@ main {
   cursor: pointer;
 }
 
+/* Eliminar un mes preparado es una acción destructiva: borde/color rojo,
+   igual que el resto de las acciones de cancelar/cerrar/borrar. */
+.btn-icono-mes--eliminar {
+  border-color: var(--rojo);
+  color: var(--rojo);
+}
+
+/* Etiqueta del mes preparado: nunca debe parecerse al indicador de "en
+   curso" (punto verde) ni al de cerrado (candado) — solo informa que
+   todavía está en preparación, en el mismo tono ámbar que su chip. */
+.indicador-preparado {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--amarillo);
+  padding: 0.3rem 0.2rem;
+}
+
 .confirmar-accion-mes {
   display: flex;
   align-items: center;
@@ -361,31 +381,6 @@ main {
   font-size: 1.3rem;
   font-weight: 700;
   max-width: 10rem;
-}
-
-/* Recordatorio de gasto fijo: solo ícono por defecto, el mensaje se
-   despliega debajo al tocarlo y se descarta deslizándolo hacia la derecha. */
-.avisos-iconos {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
-}
-
-.btn-aviso-icono {
-  border: 1px solid var(--borde);
-  background: var(--superficie-alta);
-  color: var(--texto);
-  font-size: 1.05rem;
-  width: 2.3rem;
-  height: 2.3rem;
-  border-radius: 50%;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.btn-aviso-icono--activo {
-  border-color: var(--amarillo);
-  background: rgba(217, 164, 65, 0.16);
 }
 
 .aviso-swipe {
