@@ -259,30 +259,67 @@ main {
   color: #fff;
 }
 
+.btn-confirmar--azul {
+  border-color: var(--azul-fuerte);
+  background: var(--azul-fuerte);
+}
+
 .btn-cancelar {
   border: 1px solid var(--borde);
   background: transparent;
   color: var(--texto-secundario);
 }
 
-.resumen {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+/* Tarjeta de Presupuesto: redondeada y centrada. El valor ES el ingreso
+   del mes (sin distinguir "habitual" de "efectivo"); en el mes activo (o
+   reabierto para corregir) se toca para editarlo directamente. */
+.tarjeta-presupuesto {
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
+  border-radius: 18px;
+  padding: 1rem;
+  text-align: center;
   margin-bottom: 0.75rem;
 }
 
-.resumen .etiqueta {
-  display: block;
-  font-size: 0.75rem;
+.tarjeta-presupuesto__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.tarjeta-presupuesto__valor {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--verde);
+}
+
+.tarjeta-presupuesto__valor--editable {
+  cursor: pointer;
+  display: inline-block;
+  border-bottom: 2px dashed var(--verde);
+}
+
+.tarjeta-presupuesto__valor--vacio {
+  font-size: 1.1rem;
   color: var(--texto-secundario);
 }
 
-.resumen .valor {
-  display: block;
-  font-size: 1.1rem;
+.form-presupuesto-inline {
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.4rem;
+}
+
+.form-presupuesto-inline input {
+  text-align: center;
+  font-size: 1.3rem;
   font-weight: 700;
-  color: var(--azul);
+  max-width: 10rem;
 }
 
 /* Recordatorio de gasto fijo: solo ícono por defecto, el mensaje se
@@ -329,9 +366,18 @@ main {
   font-weight: 600;
 }
 
+.aviso-swipe__fondo-texto {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.85;
+  margin-left: 0.35rem;
+}
+
 .aviso-swipe__frente {
   position: relative;
-  background: rgba(217, 164, 65, 0.12);
+  /* Fondo sólido (no transparente): si dejara ver el rojo de abajo se
+     vería rosado en vez del color real, tanto en reposo como al arrastrar. */
+  background: var(--superficie-alta);
   border-left: 3px solid var(--amarillo);
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
@@ -346,6 +392,13 @@ main {
 
 /* Panel de Alertas: campana con contador, desplegable, con filas finas de
    solo texto (sin ninguna acción) y scroll si hay más de dos. */
+.alertas-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
 .btn-alertas {
   position: relative;
   border: 1px solid var(--borde);
@@ -357,7 +410,18 @@ main {
   border-radius: 50%;
   cursor: pointer;
   line-height: 1;
-  margin-bottom: 0.6rem;
+}
+
+.btn-alerta-agregar {
+  border: 1px dashed var(--borde);
+  background: none;
+  color: var(--texto-secundario);
+  font-size: 1rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
 }
 
 .btn-alertas__contador {
@@ -396,9 +460,11 @@ main {
 }
 
 .aviso-swipe__frente--fino {
+  background: #363f48;
+  border-left: 2px solid #4b5560;
+  color: #fff;
   padding: 0.4rem 0.6rem;
   font-size: 0.82rem;
-  border-left-width: 2px;
   display: block;
 }
 
@@ -639,9 +705,12 @@ form select {
   cursor: pointer;
 }
 
+/* Convención de color de toda la app: cancelar/cerrar/borrar en tonos
+   rojos, agregar/confirmar en tonos azules, en curso/ingreso en verde. */
 .acciones-form button[type="button"] {
   background: transparent;
-  color: var(--azul);
+  border-color: var(--rojo);
+  color: var(--rojo);
 }
 
 .previstos {

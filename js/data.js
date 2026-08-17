@@ -332,8 +332,12 @@ function confirmarGastoPrevisto(mesObj, id, { fecha, importe }) {
 // Un estado de cuenta solo se puede editar mientras está "activo". Cerrarlo
 // (bloquearlo) lo deja de solo lectura hasta que se reabra explícitamente.
 // Cada cambio de estado queda registrado con fecha/hora para trazabilidad.
+// Las alertas personalizadas son operativas del mes en curso, no forman
+// parte del historial: al cerrar el mes se descartan (el resto de los
+// datos —movimientos, saldo, previstos ya confirmados— sí quedan).
 function cerrarMes(mesObj) {
   mesObj.estado = 'cerrado';
+  mesObj.alertasPersonalizadas = [];
   mesObj.historialEstado = mesObj.historialEstado || [];
   mesObj.historialEstado.push({ accion: 'cierre', fecha: new Date().toISOString() });
 }
@@ -467,11 +471,16 @@ function diasRestantesParaCerrar(mesKey) {
   return Math.round((new Date(`${fin}T00:00:00`) - new Date(`${hoyISO}T00:00:00`)) / msPorDia);
 }
 
+const MAX_ALERTAS_PERSONALIZADAS = 10;
+
+// Devuelve la alerta creada, o 'limite' si ya se llegó al máximo (para
+// evitar saturar la app de notas), o null si el texto vino vacío.
 function agregarAlertaPersonalizada(mesObj, texto) {
   const limpio = (texto || '').trim();
   if (!limpio) return null;
-  const alerta = { id: generarId('alerta'), texto: limpio };
   mesObj.alertasPersonalizadas = mesObj.alertasPersonalizadas || [];
+  if (mesObj.alertasPersonalizadas.length >= MAX_ALERTAS_PERSONALIZADAS) return 'limite';
+  const alerta = { id: generarId('alerta'), texto: limpio };
   mesObj.alertasPersonalizadas.push(alerta);
   return alerta;
 }

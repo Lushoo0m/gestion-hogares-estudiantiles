@@ -28,6 +28,7 @@ let avisosDescartados = new Set(); // ids de avisos/alertas de sistema deslizado
 let swipeEstado = null; // seguimiento del gesto de deslizar en curso
 let alertasPanelAbierto = false; // panel de Alertas (campana con contador)
 let formAlertaAbierto = false; // burbuja "+ Agregar alerta" dentro del panel
+let editandoPresupuesto = false; // tarjeta de Presupuesto en modo edición
 
 function prepararMesActivo() {
   const hogar = state.hogares[hogarSeleccionado];
@@ -65,6 +66,7 @@ function resetEstadosDeInteraccion() {
   avisosDescartados.clear();
   alertasPanelAbierto = false;
   formAlertaAbierto = false;
+  editandoPresupuesto = false;
   if (indicadorTimer) {
     clearTimeout(indicadorTimer);
     indicadorTimer = null;
@@ -162,12 +164,12 @@ function renderEncabezadoMes(mesObj) {
   if (confirmandoAccionMes) {
     const esCerrar = confirmandoAccionMes === 'cerrar';
     const pregunta = esCerrar
-      ? '¿Cerrar este estado de cuenta? Va a quedar de solo lectura.'
+      ? '¿Cerrar este estado de cuenta? Va a quedar de solo lectura y se descartan las alertas del mes (no forman parte del historial).'
       : '¿Reabrir para corregir un error?';
     html += `
       <div class="confirmar-accion-mes">
         <span>${pregunta}</span>
-        <button type="button" class="btn-confirmar" data-action="confirmar-accion-mes">Confirmar</button>
+        <button type="button" class="btn-confirmar${esCerrar ? '' : ' btn-confirmar--azul'}" data-action="confirmar-accion-mes">Confirmar</button>
         <button type="button" class="btn-cancelar" data-action="cancelar-accion-mes">Cancelar</button>
       </div>`;
     html += '</div>';
@@ -275,33 +277,39 @@ function calcularAlertas(mesObj, saldoCalculado) {
   return alertas.filter((a) => !avisosDescartados.has(a.id));
 }
 
-// Panel de Alertas: campana con el número de alertas activas. Al tocarla
+// Panel de Alertas: solo existe en el mes en curso (no es historial, es
+// operativo del momento). Campana con el número de alertas activas y, al
+// lado, un "+" discreto para crear una directamente. Al tocar la campana
 // se despliega la lista completa (hasta 2 filas visibles, con scroll si
 // hay más), cada una en un recuadro fino con solo texto. Se descartan
 // deslizando hacia la derecha: las de sistema se ocultan por esta vista,
 // las personalizadas se borran de verdad (son datos que creó el usuario).
 function renderAlertas(mesObj, saldoCalculado) {
+  if (mesObj.estado !== 'activo') return '';
   const alertas = calcularAlertas(mesObj, saldoCalculado);
-  if (!alertas.length && !alertasPanelAbierto) return '';
 
   let html = `
-    <button type="button" class="btn-alertas" data-action="toggle-alertas-panel" title="Alertas">
-      🚨${alertas.length ? `<span class="btn-alertas__contador">${alertas.length}</span>` : ''}
-    </button>`;
+    <div class="alertas-encabezado">
+      <button type="button" class="btn-alertas" data-action="toggle-alertas-panel" title="Alertas">
+        🚨${alertas.length ? `<span class="btn-alertas__contador">${alertas.length}</span>` : ''}
+      </button>
+      <button type="button" class="btn-alerta-agregar" data-action="crear-alerta-rapida" title="Crear alerta">+</button>
+    </div>`;
 
   if (alertasPanelAbierto) {
-    html += '<div class="alertas-panel">';
-    alertas.forEach((a) => {
-      html += `
-        <div class="aviso-swipe aviso-swipe--fino" data-aviso-id="${a.id}" data-tipo="${a.tipo}">
-          <div class="aviso-swipe__fondo">🗑️</div>
-          <div class="aviso-swipe__frente aviso-swipe__frente--fino">${a.texto}</div>
-        </div>`;
-    });
-    if (!alertas.length) {
+    if (alertas.length) {
+      html += '<div class="alertas-panel">';
+      alertas.forEach((a) => {
+        html += `
+          <div class="aviso-swipe aviso-swipe--fino" data-aviso-id="${a.id}" data-tipo="${a.tipo}">
+            <div class="aviso-swipe__fondo">🗑️ <span class="aviso-swipe__fondo-texto">Eliminando alerta</span></div>
+            <div class="aviso-swipe__frente aviso-swipe__frente--fino">${a.texto}</div>
+          </div>`;
+      });
+      html += '</div>';
+    } else {
       html += '<p class="alertas-panel__vacio">No hay alertas activas.</p>';
     }
-    html += '</div>';
 
     if (formAlertaAbierto) {
       html += `
@@ -322,6 +330,35 @@ function renderAlertas(mesObj, saldoCalculado) {
   return html;
 }
 
+// Tarjeta de Presupuesto: una tarjeta redondeada y centrada, sin distinguir
+// "habitual" de "efectivo" — un solo número, que es directamente el
+// importe del movimiento de ingreso del mes. En el mes activo (o un mes
+// reabierto para corregir) se puede tocar para editarlo, y eso actualiza
+// ese movimiento (recalculando el saldo solo); en un mes cerrado se ve
+// igual pero no es tocable.
+function renderTarjetaPresupuesto(movIngreso, editable) {
+  let html = '<div class="tarjeta-presupuesto">';
+  html += '<div class="tarjeta-presupuesto__label">PRESUPUESTO</div>';
+
+  if (editable && editandoPresupuesto) {
+    html += `
+      <form id="form-presupuesto" class="form-presupuesto-inline">
+        <input type="number" name="importe" min="1" step="1" value="${movIngreso ? movIngreso.importe : ''}" inputmode="numeric" autofocus>
+        <div class="acciones-form">
+          <button type="submit">Guardar</button>
+          <button type="button" data-action="cancelar-editar-presupuesto">Cancelar</button>
+        </div>
+      </form>`;
+  } else if (movIngreso) {
+    html += `<div class="tarjeta-presupuesto__valor${editable ? ' tarjeta-presupuesto__valor--editable' : ''}"${editable ? ' data-action="editar-presupuesto"' : ''}>${formatMoney(movIngreso.importe)}</div>`;
+  } else {
+    html += `<div class="tarjeta-presupuesto__valor tarjeta-presupuesto__valor--vacio${editable ? ' tarjeta-presupuesto__valor--editable' : ''}"${editable ? ' data-action="editar-presupuesto"' : ''}>Sin cargar</div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
 function renderEstadoDeCuenta() {
   const cont = document.getElementById('estado-cuenta');
   const hogar = state.hogares[hogarSeleccionado];
@@ -336,22 +373,22 @@ function renderEstadoDeCuenta() {
     return;
   }
 
-  const normalizarConcepto = (s) => s.toLowerCase().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/').trim();
-  const gastosFijosPendientes = (hogar.gastosFijos || []).filter(
-    (gf) => gf.activo && !mesObj.movimientos.some((m) => normalizarConcepto(m.concepto) === normalizarConcepto(gf.concepto))
-  );
   const editable = mesObj.estado === 'activo';
+  const normalizarConcepto = (s) => s.toLowerCase().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/').trim();
+  // El recordatorio de gasto fijo, igual que las alertas, es operativo del
+  // mes en curso: no tiene sentido (ni aparece) en un mes cerrado.
+  const gastosFijosPendientes = editable
+    ? (hogar.gastosFijos || []).filter(
+        (gf) => gf.activo && !mesObj.movimientos.some((m) => normalizarConcepto(m.concepto) === normalizarConcepto(gf.concepto))
+      )
+    : [];
   const movs = mesObj.detalleDisponible ? movimientosConSaldo(mesObj) : [];
   const saldoCalculado = mesObj.detalleDisponible ? (movs.length ? movs[movs.length - 1].saldo : 0) : undefined;
 
   let html = renderEncabezadoMes(mesObj);
 
-  html += `<div class="resumen">
-    <div><span class="etiqueta">Presupuesto habitual</span><span class="valor">${formatMoney(mesObj.presupuesto)}</span></div>`;
-  if (mesObj.presupuestoEfectivo !== mesObj.presupuesto) {
-    html += `<div><span class="etiqueta">Presupuesto efectivo</span><span class="valor">${formatMoney(mesObj.presupuestoEfectivo)}</span></div>`;
-  }
-  html += `</div>`;
+  const movIngreso = mesObj.detalleDisponible ? mesObj.movimientos.find((m) => m.tipo === 'ingreso') : null;
+  html += renderTarjetaPresupuesto(movIngreso, editable);
 
   html += renderRecordatorioFijo(gastosFijosPendientes);
   html += renderAlertas(mesObj, saldoCalculado);
@@ -385,10 +422,12 @@ function renderEstadoDeCuenta() {
             <td class="celda-concepto${expandido ? ' celda-concepto--expandida' : ''}" data-action="toggle-concepto" data-id="${m.id}">${m.concepto}${m.pendienteAclaracion ? ' <span class="marca-pendiente" title="Falta aclarar el concepto real">⚠️</span>' : ''}</td>
             <td>${m.tipo === 'ingreso' ? '+' + formatMoney(m.importe) : formatMoney(m.importe)}</td>
             <td>${formatMoney(m.saldo)}</td>
-            ${editable ? `<td class="celda-acciones">
+            ${editable ? (m.tipo === 'ingreso'
+              ? '<td class="celda-acciones"></td>'
+              : `<td class="celda-acciones">
               <button type="button" class="btn-icono" data-action="editar-mov" data-id="${m.id}" title="Editar">✏️</button>
               <button type="button" class="btn-icono" data-action="eliminar-mov" data-id="${m.id}" title="Eliminar">🗑️</button>
-            </td>` : ''}
+            </td>`) : ''}
           </tr>`;
         }).join('')}
       </tbody>
@@ -405,12 +444,6 @@ function renderEstadoDeCuenta() {
           <label>Fecha
             <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}"
               value="${editando ? editando.fecha : ''}">
-          </label>
-          <label>Tipo
-            <select name="tipo">
-              <option value="gasto_real" ${editando && editando.tipo === 'gasto_real' ? 'selected' : ''}>Gasto real</option>
-              <option value="ingreso" ${editando && editando.tipo === 'ingreso' ? 'selected' : ''}>Ingreso</option>
-            </select>
           </label>
           <label>Concepto
             <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE"
@@ -586,6 +619,22 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
+    case 'crear-alerta-rapida':
+      alertasPanelAbierto = true;
+      formAlertaAbierto = true;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'editar-presupuesto':
+      editandoPresupuesto = true;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'cancelar-editar-presupuesto':
+      editandoPresupuesto = false;
+      renderEstadoDeCuenta();
+      break;
+
     case 'abrir-form-movimiento':
       formMovimientoAbierto = true;
       renderEstadoDeCuenta();
@@ -626,7 +675,6 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       const form = document.getElementById('form-movimiento');
       if (form) {
-        form.tipo.value = 'gasto_real';
         form.concepto.value = gf.concepto;
         form.importe.value = gf.importe;
         form.fecha.focus();
@@ -671,9 +719,25 @@ function onEstadoCuentaSubmit(e) {
   const mesObj = getMesActual();
   const form = e.target;
 
+  if (form.id === 'form-presupuesto') {
+    const importe = Number(form.importe.value);
+    if (!importe || importe <= 0) {
+      alert('El importe tiene que ser mayor a $0.');
+      return;
+    }
+    const movIngreso = mesObj.movimientos.find((m) => m.tipo === 'ingreso');
+    if (movIngreso) {
+      actualizarMovimiento(mesObj, movIngreso.id, { importe });
+    } else {
+      agregarMovimiento(mesObj, { fecha: primerDiaMes(mesObj.mes), concepto: 'PRESUPUESTO', tipo: 'ingreso', importe });
+    }
+    editandoPresupuesto = false;
+    persistirYRenderizar();
+    return;
+  }
+
   if (form.id === 'form-movimiento') {
     const fecha = form.fecha.value;
-    const tipo = form.tipo.value;
     const concepto = form.concepto.value;
     const importe = Number(form.importe.value);
 
@@ -686,12 +750,14 @@ function onEstadoCuentaSubmit(e) {
       return;
     }
 
+    // Todo lo que se carga desde este formulario es gasto real: el
+    // ingreso (Presupuesto) se edita aparte, tocando su propia tarjeta.
     const editingId = form.dataset.editingId;
     if (editingId) {
-      actualizarMovimiento(mesObj, editingId, { fecha, tipo, concepto, importe });
+      actualizarMovimiento(mesObj, editingId, { fecha, tipo: 'gasto_real', concepto, importe });
       editandoMovId = null;
     } else {
-      agregarMovimiento(mesObj, { fecha, tipo, concepto, importe });
+      agregarMovimiento(mesObj, { fecha, tipo: 'gasto_real', concepto, importe });
     }
     formMovimientoAbierto = false;
     persistirYRenderizar();
@@ -713,7 +779,11 @@ function onEstadoCuentaSubmit(e) {
   }
 
   if (form.id === 'form-alerta') {
-    agregarAlertaPersonalizada(mesObj, form.texto.value);
+    const resultado = agregarAlertaPersonalizada(mesObj, form.texto.value);
+    if (resultado === 'limite') {
+      alert('Ya hay 10 alertas cargadas (el máximo). Descartá o borrá alguna antes de agregar una nueva.');
+      return;
+    }
     formAlertaAbierto = false;
     persistirYRenderizar();
   }
@@ -752,7 +822,7 @@ function renderRespaldo() {
     html += `
       <div class="confirmar-accion-mes">
         <span>📤 ¿Descargar un respaldo completo (todos los Hogares y meses guardados en este dispositivo)?</span>
-        <button type="button" class="btn-confirmar" data-action="confirmar-exportar">Confirmar</button>
+        <button type="button" class="btn-confirmar btn-confirmar--azul" data-action="confirmar-exportar">Confirmar</button>
         <button type="button" class="btn-cancelar" data-action="cancelar-respaldo">Cancelar</button>
       </div>`;
   } else if (respaldoAbierto === 'importar') {
