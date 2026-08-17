@@ -298,8 +298,6 @@ main {
 
 .tarjeta-presupuesto__valor--editable {
   cursor: pointer;
-  display: inline-block;
-  border-bottom: 2px dashed var(--verde);
 }
 
 .tarjeta-presupuesto__valor--vacio {
