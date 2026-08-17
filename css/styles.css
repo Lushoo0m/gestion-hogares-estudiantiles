@@ -110,9 +110,41 @@ main {
   white-space: nowrap;
 }
 
-.chip-mes--vacio {
-  opacity: 0.35;
-  cursor: not-allowed;
+/* "+" para crear el único mes siguiente disponible, mismo lenguaje visual
+   que el "+" de Alertas. */
+.btn-mes-agregar {
+  border: 1px dashed var(--borde);
+  background: none;
+  color: var(--texto-secundario);
+  font-size: 1.1rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.form-nuevo-mes {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+}
+
+.form-nuevo-mes__titulo {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--texto-secundario);
+  white-space: nowrap;
+}
+
+.form-nuevo-mes input {
+  width: 8rem;
+}
+
+.form-nuevo-mes .acciones-form {
+  flex-basis: 100%;
 }
 
 .chip-mes--activo:not(.chip-mes--seleccionado) {

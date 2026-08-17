@@ -391,20 +391,47 @@ function mesAbrev(mesKey) {
   return `${MES_ABREV[parseInt(mes, 10) - 1]}${anio.slice(2)}`;
 }
 
-// El ciclo de un Hogar arranca en junio del año de su primer mes cargado y
-// recorre 12 meses (jun-jul-ago-...-may). Esto arma la tira completa del
-// selector aunque los meses futuros todavía no tengan estado de cuenta
-// creado — esos se muestran deshabilitados, nunca con datos inventados.
-function cicloMesesHogar(hogar) {
-  const clavesExistentes = Object.keys(hogar.meses).sort();
-  if (!clavesExistentes.length) return [];
-  const [anioPrimero, mesPrimero] = clavesExistentes[0].split('-').map(Number);
-  const anioInicio = mesPrimero >= 6 ? anioPrimero : anioPrimero - 1;
-  const secuencia = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
-  return secuencia.map((mesNum) => {
-    const anio = mesNum >= 6 ? anioInicio : anioInicio + 1;
-    return `${anio}-${String(mesNum).padStart(2, '0')}`;
-  });
+// El selector de meses solo muestra los meses que realmente existen, más
+// un "+" para crear el siguiente — nunca una tira fija con casilleros
+// deshabilitados. Esta función calcula cuál es ese único mes creable: el
+// que sigue cronológicamente al último mes que ya existe para el Hogar.
+// Así se puede ir "preparando el terreno" un mes por vez, nunca más de uno
+// por delante de lo que ya está cargado.
+function proximoMesCreable(hogar) {
+  const claves = Object.keys(hogar.meses).sort();
+  if (!claves.length) return null;
+  const ultima = claves[claves.length - 1];
+  const [anio, mes] = ultima.split('-').map(Number);
+  const siguienteMes = mes === 12 ? 1 : mes + 1;
+  const siguienteAnio = mes === 12 ? anio + 1 : anio;
+  return `${siguienteAnio}-${String(siguienteMes).padStart(2, '0')}`;
+}
+
+// Crea el estado de cuenta de un mes nuevo, con el presupuesto que cargue
+// el usuario como único movimiento inicial (ingreso, fechado el día 1).
+// Nunca se inventa un importe: lo pone la persona en el momento de crearlo.
+function crearMesNuevo(hogar, mesKey, presupuestoInicial) {
+  const importe = Math.round(Number(presupuestoInicial));
+  const movimientoInicial = {
+    id: generarId('mov'),
+    fecha: primerDiaMes(mesKey),
+    concepto: 'PRESUPUESTO',
+    tipo: 'ingreso',
+    importe,
+  };
+  const mesNuevo = {
+    mes: mesKey,
+    estado: 'activo',
+    presupuesto: importe,
+    presupuestoEfectivo: importe,
+    ajustes: [],
+    detalleDisponible: true,
+    movimientos: [movimientoInicial],
+    gastosPrevistos: [],
+    alertasPersonalizadas: [],
+  };
+  hogar.meses[mesKey] = mesNuevo;
+  return mesNuevo;
 }
 
 // Respaldo completo (exportar/importar): un único archivo JSON con todo el

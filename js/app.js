@@ -29,6 +29,7 @@ let swipeEstado = null; // seguimiento del gesto de deslizar en curso
 let alertasPanelAbierto = false; // panel de Alertas (campana con contador)
 let formAlertaAbierto = false; // burbuja "+ Agregar alerta" dentro del panel
 let editandoPresupuesto = false; // tarjeta de Presupuesto en modo edición
+let formNuevoMesAbierto = false; // burbuja "+" para crear el mes siguiente
 
 function prepararMesActivo() {
   const hogar = state.hogares[hogarSeleccionado];
@@ -51,6 +52,8 @@ function init() {
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
   document.getElementById('estado-cuenta').addEventListener('pointerdown', onAvisoPointerDown);
   document.getElementById('respaldo').addEventListener('click', onRespaldoClick);
+  document.getElementById('selector-meses').addEventListener('click', onSelectorMesesClick);
+  document.getElementById('selector-meses').addEventListener('submit', onSelectorMesesSubmit);
 }
 
 function resetEstadosDeInteraccion() {
@@ -67,6 +70,7 @@ function resetEstadosDeInteraccion() {
   alertasPanelAbierto = false;
   formAlertaAbierto = false;
   editandoPresupuesto = false;
+  formNuevoMesAbierto = false;
   if (indicadorTimer) {
     clearTimeout(indicadorTimer);
     indicadorTimer = null;
@@ -95,52 +99,104 @@ function renderSelectorHogares() {
   });
 }
 
-// Tira fija de los 12 meses del ciclo (jun-jul-ago-...-may). Los meses sin
-// estado de cuenta creado todavía se muestran deshabilitados, sin inventar
-// datos. Al seleccionar un mes existente, su chip se expande con el nombre
-// completo y se colorea según esté activo (editable) o cerrado (solo lectura).
+// Solo se muestran los meses que ya existen, más un "+" (mismo lenguaje
+// visual que el de Alertas) para crear el siguiente — nunca una tira fija
+// con casilleros deshabilitados. Al seleccionar un mes existente, su chip
+// se expande con el nombre completo y se colorea según esté activo
+// (editable) o cerrado (solo lectura). El "+" solo permite crear UN mes
+// por delante del último que ya existe, para ir preparando el terreno
+// para cuando se cierre el mes en curso.
 function renderSelectorMeses() {
   const cont = document.getElementById('selector-meses');
-  cont.innerHTML = '';
   const hogar = state.hogares[hogarSeleccionado];
-  const ciclo = cicloMesesHogar(hogar);
+  const meses = getMesesOrdenados(hogar);
 
-  if (!ciclo.length) {
+  if (!meses.length) {
     cont.innerHTML = '<p class="aviso">Este Hogar todavía no tiene meses cargados.</p>';
     return;
   }
 
-  ciclo.forEach((mesKey) => {
-    const mesObj = hogar.meses[mesKey];
-    const btn = document.createElement('button');
-
-    if (!mesObj) {
-      btn.className = 'chip-mes chip-mes--vacio';
-      btn.disabled = true;
-      btn.innerHTML = `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>`;
-      cont.appendChild(btn);
-      return;
-    }
-
+  let html = '';
+  meses.forEach((mesObj) => {
+    const mesKey = mesObj.mes;
     const seleccionado = mesKey === mesSeleccionado;
     const bloqueado = mesObj.estado === 'cerrado';
     // El candado solo se muestra en los meses cerrados (bloqueados): un mes
     // activo se ve "libre", sin candado, solo con su nombre.
     const candado = bloqueado ? '<span class="chip-mes__candado">🔒</span>' : '';
-    btn.className = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + (bloqueado ? ' chip-mes--bloqueado' : ' chip-mes--activo');
-    btn.innerHTML = seleccionado
+    const clase = 'chip-mes' + (seleccionado ? ' chip-mes--seleccionado' : '') + (bloqueado ? ' chip-mes--bloqueado' : ' chip-mes--activo');
+    const contenido = seleccionado
       ? `${candado}<span class="chip-mes__nombre">${mesLabel(mesKey).toUpperCase()}</span>`
       : `<span class="chip-mes__codigo">${mesAbrev(mesKey)}</span>${candado}`;
+    html += `<button type="button" class="${clase}" data-action="seleccionar-mes" data-mes="${mesKey}">${contenido}</button>`;
+  });
 
-    btn.addEventListener('click', () => {
-      mesSeleccionado = mesKey;
+  const proximo = proximoMesCreable(hogar);
+  if (proximo) {
+    if (formNuevoMesAbierto) {
+      html += `
+        <form id="form-nuevo-mes" class="form-nuevo-mes">
+          <span class="form-nuevo-mes__titulo">${mesLabel(proximo).toUpperCase()}</span>
+          <input type="number" name="presupuesto" min="1" step="1" placeholder="Presupuesto" required autofocus>
+          <div class="acciones-form">
+            <button type="submit">Crear</button>
+            <button type="button" data-action="cancelar-nuevo-mes">Cancelar</button>
+          </div>
+        </form>`;
+    } else {
+      html += `<button type="button" class="btn-mes-agregar" data-action="abrir-nuevo-mes" title="Crear ${mesLabel(proximo)}">+</button>`;
+    }
+  }
+
+  cont.innerHTML = html;
+}
+
+function onSelectorMesesClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  switch (btn.dataset.action) {
+    case 'seleccionar-mes':
+      mesSeleccionado = btn.dataset.mes;
       prepararMesActivo();
       resetEstadosDeInteraccion();
       renderSelectorMeses();
       renderEstadoDeCuenta();
-    });
-    cont.appendChild(btn);
-  });
+      break;
+
+    case 'abrir-nuevo-mes':
+      formNuevoMesAbierto = true;
+      renderSelectorMeses();
+      break;
+
+    case 'cancelar-nuevo-mes':
+      formNuevoMesAbierto = false;
+      renderSelectorMeses();
+      break;
+  }
+}
+
+function onSelectorMesesSubmit(e) {
+  e.preventDefault();
+  const form = e.target;
+  if (form.id !== 'form-nuevo-mes') return;
+
+  const hogar = state.hogares[hogarSeleccionado];
+  const mesKey = proximoMesCreable(hogar);
+  const presupuesto = Number(form.presupuesto.value);
+  if (!mesKey || !presupuesto || presupuesto <= 0) {
+    alert('El presupuesto tiene que ser mayor a $0.');
+    return;
+  }
+
+  crearMesNuevo(hogar, mesKey, presupuesto);
+  saveState(state);
+  formNuevoMesAbierto = false;
+  mesSeleccionado = mesKey;
+  prepararMesActivo();
+  resetEstadosDeInteraccion();
+  renderSelectorMeses();
+  renderEstadoDeCuenta();
 }
 
 function getMesActual() {
