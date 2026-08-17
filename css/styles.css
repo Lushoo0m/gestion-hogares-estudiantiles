@@ -380,6 +380,23 @@ main {
   color: var(--texto-secundario);
 }
 
+/* Resumen de "pendiente con MAMÁ" (Finanzas): informativo, ni error ni
+   advertencia, así que va en un tono neutro secundario. */
+.aviso-mama {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+  margin: 0.4rem 0 0.75rem;
+}
+
+.aviso-mama strong {
+  color: var(--texto);
+}
+
+.marca-mama {
+  font-size: 0.8rem;
+}
+
 .form-presupuesto-inline {
   align-items: center;
   background: none;
@@ -795,6 +812,22 @@ form select {
   background: var(--fondo);
   color: var(--texto);
   color-scheme: dark;
+}
+
+/* Checkbox dentro de un formulario (ej. tag "MAMÁ"): fila en vez de columna,
+   y el checkbox nativo sin el padding/borde que llevan los demás inputs. */
+.label-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.label-checkbox input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--azul);
 }
 
 .acciones-form {

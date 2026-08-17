@@ -48,6 +48,7 @@ function persistirYRenderizarFinanzas() {
 
 function renderFinanzas() {
   const fin = state.finanzas;
+  if (asegurarPrevistosRecurrentesFinanzas(fin)) saveState(state);
   const meses = getMesesFinanzasOrdenados(fin);
   if (!finMesSeleccionado || !meses.includes(finMesSeleccionado)) {
     finMesSeleccionado = meses[meses.length - 1];
@@ -74,12 +75,19 @@ function renderFinCuenta(fin) {
   const todos = movimientosConSaldo(fin);
   const saldoTotal = todos.length ? todos[todos.length - 1].saldo : 0;
   const movsDelMes = todos.filter((m) => m.fecha.slice(0, 7) === finMesSeleccionado);
+  const pendienteMama = (fin.movimientos || [])
+    .filter((m) => m.categoria === 'mama' && m.tipo !== 'ingreso')
+    .reduce((total, m) => total + m.importe, 0);
 
   let html = `
     <div class="tarjeta-presupuesto">
       <div class="tarjeta-presupuesto__label">SALDO TOTAL</div>
       <div class="tarjeta-presupuesto__valor">${formatMoney(saldoTotal)}</div>
     </div>`;
+
+  if (pendienteMama > 0) {
+    html += `<p class="aviso-mama">👩 Pendiente con MAMÁ: <strong>${formatMoney(pendienteMama)}</strong></p>`;
+  }
 
   html += renderFinAlertas(fin);
 
@@ -100,7 +108,7 @@ function renderFinCuenta(fin) {
             return `
             <tr class="${m.tipo === 'ingreso' ? 'fila-ingreso' : ''}${m.pendienteAclaracion ? ' fila-pendiente' : ''}">
               <td>${fechaCorta(m.fecha)}</td>
-              <td class="celda-concepto${expandido ? ' celda-concepto--expandida' : ''}" data-action="fin-toggle-concepto" data-id="${m.id}">${m.concepto}${m.pendienteAclaracion ? ' <span class="marca-pendiente" title="Falta aclarar el concepto real">⚠️</span>' : ''}</td>
+              <td class="celda-concepto${expandido ? ' celda-concepto--expandida' : ''}" data-action="fin-toggle-concepto" data-id="${m.id}">${m.concepto}${m.categoria === 'mama' ? ' <span class="marca-mama" title="Gasto a nombre de MAMÁ, pendiente de que ella lo arregle">👩</span>' : ''}${m.pendienteAclaracion ? ' <span class="marca-pendiente" title="Falta aclarar el concepto real">⚠️</span>' : ''}</td>
               <td>${m.tipo === 'ingreso' ? '+' + formatMoney(m.importe) : '-' + formatMoney(m.importe)}</td>
               <td>${formatMoney(m.saldo)}</td>
               <td class="celda-acciones">
@@ -137,6 +145,10 @@ function renderFinCuenta(fin) {
         <label>Importe ($)
           <input type="number" name="importe" min="1" step="1" required value="${editando ? editando.importe : ''}">
         </label>
+        <label class="label-checkbox">
+          <input type="checkbox" name="categoriaMama" ${editando && editando.categoria === 'mama' ? 'checked' : ''}>
+          👩 Es un gasto a nombre de MAMÁ (lo arregla después)
+        </label>
         <div class="acciones-form">
           <button type="submit">${editando ? 'Guardar cambios' : 'Agregar'}</button>
           <button type="button" data-action="fin-cerrar-form-movimiento">Cancelar</button>
@@ -160,7 +172,7 @@ function renderFinPrevistos(fin) {
     html += '<ul class="previstos">';
     fin.gastosPrevistos.forEach((p) => {
       html += `<li>
-        <div class="previsto-mensaje">${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
+        <div class="previsto-mensaje">${p.concepto} — ${p.importeEstimado ? formatMoney(p.importeEstimado) : 'importe a confirmar'}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
         <div class="previsto-acciones">
           <button type="button" class="btn-confirmar-previsto" data-action="fin-confirmar-previsto" data-id="${p.id}">✔ Confirmar gasto real</button>
           <button type="button" class="btn-icono" data-action="fin-eliminar-previsto" data-id="${p.id}" title="Eliminar">🗑️</button>
@@ -172,7 +184,7 @@ function renderFinPrevistos(fin) {
               <input type="date" name="fecha" required value="${new Date().toISOString().slice(0, 10)}">
             </label>
             <label>Importe real ($)
-              <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado}">
+              <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado || ''}">
             </label>
             <div class="acciones-form">
               <button type="submit">Confirmar</button>
@@ -491,6 +503,8 @@ function onFinCuentaSubmit(e) {
     const fecha = form.fecha.value;
     const concepto = form.concepto.value;
     const importe = Number(form.importe.value);
+    // El tag "MAMÁ" solo tiene sentido en un gasto (nunca en un ingreso).
+    const categoria = tipo === 'gasto' && form.categoriaMama.checked ? 'mama' : null;
 
     if (!fecha) {
       alert('Elegí una fecha.');
@@ -503,10 +517,10 @@ function onFinCuentaSubmit(e) {
 
     const editingId = form.dataset.editingId;
     if (editingId) {
-      actualizarMovimiento(fin, editingId, { fecha, tipo, concepto, importe });
+      actualizarMovimiento(fin, editingId, { fecha, tipo, concepto, importe, categoria });
       finEditandoMovId = null;
     } else {
-      agregarMovimiento(fin, { fecha, tipo, concepto, importe });
+      agregarMovimiento(fin, { fecha, tipo, concepto, importe, categoria });
     }
     finFormMovimientoAbierto = false;
     finMesSeleccionado = fecha.slice(0, 7);

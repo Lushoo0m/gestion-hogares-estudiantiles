@@ -130,6 +130,30 @@ const SEED_STATE = {
     gastosPrevistos: [],
     inversiones: [],
     alertas: [],
+    // Se sugieren como gasto previsto de cada mes (igual que en los
+    // Hogares), no como movimiento cargado solo: los pagos de tarjeta
+    // varían con cada cierre, así que el importe real siempre lo confirma
+    // la persona a mano contra lo que le llegó.
+    previstosRecurrentes: [
+      {
+        id: 'pr-fin-itau',
+        concepto: 'Pago Crédito Itaú',
+        importeEstimado: 0,
+        nota: 'El total varía con cada cierre: cargar el importe real de la tarjeta.',
+      },
+      {
+        id: 'pr-fin-bbva',
+        concepto: 'Pago Crédito BBVA',
+        importeEstimado: 0,
+        nota: 'El total varía con cada cierre: cargar el importe real de la tarjeta.',
+      },
+      {
+        id: 'pr-fin-club',
+        concepto: 'Club',
+        importeEstimado: 8000,
+        nota: '',
+      },
+    ],
   },
 };
 
@@ -171,7 +195,7 @@ function completarFinanzasDesdeSemilla(state) {
     state.finanzas = clone(SEED_STATE.finanzas);
     return true;
   }
-  ['movimientos', 'gastosPrevistos', 'inversiones', 'alertas'].forEach((campo) => {
+  ['movimientos', 'gastosPrevistos', 'inversiones', 'alertas', 'previstosRecurrentes'].forEach((campo) => {
     if (!Array.isArray(state.finanzas[campo])) {
       state.finanzas[campo] = [];
       cambio = true;
@@ -245,6 +269,16 @@ function completarPrevistosRecurrentesDesdeSemilla(state) {
       }
     });
   });
+  if (state.finanzas) {
+    state.finanzas.previstosRecurrentes = state.finanzas.previstosRecurrentes || [];
+    (SEED_STATE.finanzas.previstosRecurrentes || []).forEach((prSemilla) => {
+      const yaExiste = state.finanzas.previstosRecurrentes.some((pr) => pr.id === prSemilla.id);
+      if (!yaExiste) {
+        state.finanzas.previstosRecurrentes.push(clone(prSemilla));
+        cambio = true;
+      }
+    });
+  }
   return cambio;
 }
 
@@ -323,7 +357,10 @@ function normalizarConceptoIngresado(concepto) {
   return limpio || 'CONCEPTO PENDIENTE';
 }
 
-function agregarMovimiento(mesObj, { fecha, concepto, tipo, importe }) {
+// "categoria" es opcional y hoy solo la usa Finanzas (para marcar un gasto
+// como "a nombre de MAMÁ", pendiente de que ella lo arregle); los Hogares
+// nunca la pasan, así que ahí queda simplemente sin definir.
+function agregarMovimiento(mesObj, { fecha, concepto, tipo, importe, categoria }) {
   const conceptoFinal = normalizarConceptoIngresado(concepto);
   const movimiento = {
     id: generarId('mov'),
@@ -333,6 +370,7 @@ function agregarMovimiento(mesObj, { fecha, concepto, tipo, importe }) {
     importe: Math.round(Number(importe)),
     pendienteAclaracion: conceptoFinal === 'CONCEPTO PENDIENTE',
   };
+  if (categoria) movimiento.categoria = categoria;
   mesObj.movimientos.push(movimiento);
   return movimiento;
 }
@@ -347,6 +385,10 @@ function actualizarMovimiento(mesObj, id, cambios) {
     const conceptoFinal = normalizarConceptoIngresado(cambios.concepto);
     mov.concepto = conceptoFinal;
     mov.pendienteAclaracion = conceptoFinal === 'CONCEPTO PENDIENTE';
+  }
+  if (cambios.categoria !== undefined) {
+    if (cambios.categoria) mov.categoria = cambios.categoria;
+    else delete mov.categoria;
   }
 }
 
@@ -583,6 +625,36 @@ function asegurarPrevistosRecurrentes(hogar, mesObj) {
     const yaComoMovimiento = (mesObj.movimientos || []).some((m) => normalizar(m.concepto).includes(normalizar(pr.concepto).split(' (')[0]));
     if (!yaComoPrevisto && !yaComoMovimiento) {
       mesObj.gastosPrevistos.push({
+        id: generarId('prev'),
+        concepto: pr.concepto,
+        importeEstimado: pr.importeEstimado,
+        confirmado: false,
+        nota: pr.nota || '',
+      });
+      cambio = true;
+    }
+  });
+  return cambio;
+}
+
+// Igual que asegurarPrevistosRecurrentes, pero para Finanzas: como acá no
+// hay "mes activo" (es un registro continuo), el chequeo de "ya está
+// cargado" es contra el mes calendario actual en vez de mesObj.estado —
+// así cada pago de tarjeta o cuota fija se vuelve a sugerir mes a mes, en
+// vez de dejar de aparecer para siempre después de la primera vez.
+function asegurarPrevistosRecurrentesFinanzas(finanzas) {
+  const hoy = new Date();
+  const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+  const normalizar = (s) => s.toLowerCase().trim();
+  let cambio = false;
+  finanzas.gastosPrevistos = finanzas.gastosPrevistos || [];
+  (finanzas.previstosRecurrentes || []).forEach((pr) => {
+    const yaComoPrevisto = finanzas.gastosPrevistos.some((p) => normalizar(p.concepto) === normalizar(pr.concepto));
+    const yaComoMovimientoEsteMes = (finanzas.movimientos || []).some(
+      (m) => m.fecha.slice(0, 7) === mesActual && normalizar(m.concepto).includes(normalizar(pr.concepto).split(' (')[0])
+    );
+    if (!yaComoPrevisto && !yaComoMovimientoEsteMes) {
+      finanzas.gastosPrevistos.push({
         id: generarId('prev'),
         concepto: pr.concepto,
         importeEstimado: pr.importeEstimado,
