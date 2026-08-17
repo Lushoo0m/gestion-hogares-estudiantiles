@@ -23,14 +23,23 @@ let indicadorTimer = null;
 let respaldoAbierto = null; // 'exportar' | 'importar' | null
 let archivoImportarTexto = null;
 let archivoImportarNombre = null;
-let avisoAbiertoId = null; // id del aviso/recordatorio con el mensaje desplegado (uno solo a la vez)
-let avisosDescartados = new Set(); // ids de avisos deslizados hacia la derecha en esta vista
+let avisoAbiertoId = null; // id del recordatorio de gasto fijo desplegado (uno solo a la vez)
+let avisosDescartados = new Set(); // ids de avisos/alertas de sistema deslizados en esta vista
 let swipeEstado = null; // seguimiento del gesto de deslizar en curso
+let alertasPanelAbierto = false; // panel de Alertas (campana con contador)
+let formAlertaAbierto = false; // burbuja "+ Agregar alerta" dentro del panel
+
+function prepararMesActivo() {
+  const hogar = state.hogares[hogarSeleccionado];
+  const mesObj = mesSeleccionado ? hogar.meses[mesSeleccionado] : null;
+  if (mesObj && asegurarPrevistosRecurrentes(hogar, mesObj)) saveState(state);
+}
 
 function init() {
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
   const activo = meses.find((m) => m.estado === 'activo');
   mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
+  prepararMesActivo();
 
   renderSelectorHogares();
   renderSelectorMeses();
@@ -54,6 +63,8 @@ function resetEstadosDeInteraccion() {
   indicadorExpandido = false;
   avisoAbiertoId = null;
   avisosDescartados.clear();
+  alertasPanelAbierto = false;
+  formAlertaAbierto = false;
   if (indicadorTimer) {
     clearTimeout(indicadorTimer);
     indicadorTimer = null;
@@ -72,6 +83,7 @@ function renderSelectorHogares() {
       const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
       const activo = meses.find((m) => m.estado === 'activo');
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
+      prepararMesActivo();
       resetEstadosDeInteraccion();
       renderSelectorHogares();
       renderSelectorMeses();
@@ -120,6 +132,7 @@ function renderSelectorMeses() {
 
     btn.addEventListener('click', () => {
       mesSeleccionado = mesKey;
+      prepararMesActivo();
       resetEstadosDeInteraccion();
       renderSelectorMeses();
       renderEstadoDeCuenta();
@@ -186,53 +199,124 @@ function renderEncabezadoMes(mesObj) {
   return html;
 }
 
-// Ajustes de presupuesto y recordatorios de gastos fijos, minimalistas:
-// solo íconos por defecto. Tocar un ícono despliega su mensaje debajo (y
-// cierra cualquier otro que estuviera abierto — uno solo a la vez).
-// Deslizar el mensaje hacia la derecha lo descarta de esta vista (no borra
-// ningún dato: un ajuste sigue siendo parte del mes, un gasto fijo sigue
-// pendiente; solo se oculta la notificación hasta cambiar de mes).
-function renderAvisosYRecordatorios(mesObj, gastosFijosPendientes) {
-  const items = [];
-
-  (mesObj.ajustes || []).forEach((aj, i) => {
-    const id = `ajuste-${i}`;
-    if (avisosDescartados.has(id)) return;
-    items.push({ id, icono: '⚠️', tipo: 'aviso', mensaje: `${aj.concepto}: ${formatMoney(aj.importe)}` });
-  });
-
-  if (mesObj.estado === 'activo') {
-    gastosFijosPendientes.forEach((gf) => {
-      const id = `recordatorio-${gf.id}`;
-      if (avisosDescartados.has(id)) return;
-      items.push({
-        id,
-        icono: '🔔',
-        tipo: 'recordatorio',
-        gfId: gf.id,
-        mensaje: `Gasto fijo mensual sin confirmar todavía — ${gf.concepto} (${formatMoney(gf.importe)}).${gf.nota ? ` ${gf.nota}` : ''}`,
-      });
-    });
-  }
-
-  if (!items.length) return '';
+// Recordatorio de gasto fijo pendiente (solo bombas/sanitaria: el envío de
+// sobre ahora se sugiere como gasto previsto, no como recordatorio). Solo
+// ícono por defecto; tocarlo despliega el mensaje con la acción
+// "Registrar ahora" (es la única de estas notificaciones que tiene una
+// acción real). Deslizar hacia la derecha lo descarta de esta vista.
+function renderRecordatorioFijo(gastosFijosPendientes) {
+  if (!gastosFijosPendientes.length) return '';
 
   let html = '<div class="avisos-iconos">';
-  items.forEach((it) => {
-    html += `<button type="button" class="btn-aviso-icono${it.id === avisoAbiertoId ? ' btn-aviso-icono--activo' : ''}" data-action="toggle-aviso" data-aviso-id="${it.id}" title="${it.tipo === 'recordatorio' ? 'Recordatorio' : 'Aviso'}">${it.icono}</button>`;
+  gastosFijosPendientes.forEach((gf) => {
+    const id = `recordatorio-${gf.id}`;
+    if (avisosDescartados.has(id)) return;
+    const activo = id === avisoAbiertoId;
+    html += `<button type="button" class="btn-aviso-icono${activo ? ' btn-aviso-icono--activo' : ''}" data-action="toggle-aviso" data-aviso-id="${id}" title="Recordatorio">🔔</button>`;
   });
   html += '</div>';
 
-  const abierto = items.find((it) => it.id === avisoAbiertoId);
-  if (abierto) {
+  const gf = gastosFijosPendientes.find((g) => `recordatorio-${g.id}` === avisoAbiertoId);
+  if (gf && !avisosDescartados.has(avisoAbiertoId)) {
+    const mensaje = `Gasto fijo mensual sin confirmar todavía — ${gf.concepto} (${formatMoney(gf.importe)}).${gf.nota ? ` ${gf.nota}` : ''}`;
     html += `
-      <div class="aviso-swipe" data-aviso-id="${abierto.id}">
+      <div class="aviso-swipe" data-aviso-id="${avisoAbiertoId}" data-tipo="sistema">
         <div class="aviso-swipe__fondo">🗑️ Deslizar para descartar</div>
         <div class="aviso-swipe__frente">
-          <span>${abierto.icono} ${abierto.mensaje}</span>
-          ${abierto.tipo === 'recordatorio' ? `<button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${abierto.gfId}">Registrar ahora</button>` : ''}
+          <span>🔔 ${mensaje}</span>
+          <button type="button" class="btn-link" data-action="registrar-fijo" data-gf-id="${gf.id}">Registrar ahora</button>
         </div>
       </div>`;
+  }
+
+  return html;
+}
+
+// Genera la lista de alertas activas del mes: reducciones de presupuesto,
+// cuenta regresiva para cerrar el mes, saldo que no cuadra contra el
+// cierre registrado, conceptos pendientes de aclarar, y las que el usuario
+// haya creado a mano. Son solo informativas (sin botones de acción).
+function calcularAlertas(mesObj, saldoCalculado) {
+  const alertas = [];
+
+  (mesObj.ajustes || []).forEach((aj, i) => {
+    if (aj.importe < 0) {
+      alertas.push({ id: `reduccion-${i}`, tipo: 'sistema', texto: `Reducción de presupuesto: ${aj.concepto} (${formatMoney(aj.importe)}).` });
+    }
+  });
+
+  if (mesObj.estado === 'activo') {
+    const dias = diasRestantesParaCerrar(mesObj.mes);
+    if (dias >= 0 && dias <= 5) {
+      const faltan = dias === 0 ? 'Hoy es el último día' : dias === 1 ? 'Queda 1 día' : `Quedan ${dias} días`;
+      alertas.push({ id: 'cuenta-regresiva-5', tipo: 'sistema', texto: `${faltan} para que termine ${mesLabel(mesObj.mes)} y cerrar el estado de cuenta.` });
+      if (dias <= 2) {
+        alertas.push({ id: 'cuenta-regresiva-2', tipo: 'sistema', texto: '¡Últimos días! No te olvides de registrar los gastos pendientes antes de cerrar el mes.' });
+      }
+    }
+  }
+
+  if (mesObj.detalleDisponible && mesObj.estado === 'cerrado' && mesObj.saldoFinalRegistrado !== undefined && saldoCalculado !== mesObj.saldoFinalRegistrado) {
+    alertas.push({ id: 'saldo-mismatch', tipo: 'sistema', texto: `El saldo calculado (${formatMoney(saldoCalculado)}) no coincide con el saldo de cierre registrado (${formatMoney(mesObj.saldoFinalRegistrado)}). Revisar.` });
+  }
+
+  if (mesObj.detalleDisponible) {
+    const pendientes = (mesObj.movimientos || []).filter((m) => m.pendienteAclaracion);
+    if (pendientes.length) {
+      const plural = pendientes.length === 1 ? 'gasto tiene' : 'gastos tienen';
+      alertas.push({ id: 'conceptos-pendientes', tipo: 'sistema', texto: `${pendientes.length} ${plural} el concepto pendiente de aclarar.` });
+    }
+  }
+
+  (mesObj.alertasPersonalizadas || []).forEach((a) => {
+    alertas.push({ id: a.id, tipo: 'personalizada', texto: a.texto });
+  });
+
+  return alertas.filter((a) => !avisosDescartados.has(a.id));
+}
+
+// Panel de Alertas: campana con el número de alertas activas. Al tocarla
+// se despliega la lista completa (hasta 2 filas visibles, con scroll si
+// hay más), cada una en un recuadro fino con solo texto. Se descartan
+// deslizando hacia la derecha: las de sistema se ocultan por esta vista,
+// las personalizadas se borran de verdad (son datos que creó el usuario).
+function renderAlertas(mesObj, saldoCalculado) {
+  const alertas = calcularAlertas(mesObj, saldoCalculado);
+  if (!alertas.length && !alertasPanelAbierto) return '';
+
+  let html = `
+    <button type="button" class="btn-alertas" data-action="toggle-alertas-panel" title="Alertas">
+      🚨${alertas.length ? `<span class="btn-alertas__contador">${alertas.length}</span>` : ''}
+    </button>`;
+
+  if (alertasPanelAbierto) {
+    html += '<div class="alertas-panel">';
+    alertas.forEach((a) => {
+      html += `
+        <div class="aviso-swipe aviso-swipe--fino" data-aviso-id="${a.id}" data-tipo="${a.tipo}">
+          <div class="aviso-swipe__fondo">🗑️</div>
+          <div class="aviso-swipe__frente aviso-swipe__frente--fino">${a.texto}</div>
+        </div>`;
+    });
+    if (!alertas.length) {
+      html += '<p class="alertas-panel__vacio">No hay alertas activas.</p>';
+    }
+    html += '</div>';
+
+    if (formAlertaAbierto) {
+      html += `
+        <form id="form-alerta" class="form-burbuja">
+          <label>Texto de la alerta
+            <input type="text" name="texto" required maxlength="140" placeholder="Ej: confirmar recibo de sanitaria">
+          </label>
+          <div class="acciones-form">
+            <button type="submit">Agregar alerta</button>
+            <button type="button" data-action="cerrar-form-alerta">Cancelar</button>
+          </div>
+        </form>`;
+    } else {
+      html += `<button type="button" class="burbuja-agregar burbuja-agregar--alerta" data-action="abrir-form-alerta">+ Agregar alerta</button>`;
+    }
   }
 
   return html;
@@ -256,6 +340,9 @@ function renderEstadoDeCuenta() {
   const gastosFijosPendientes = (hogar.gastosFijos || []).filter(
     (gf) => gf.activo && !mesObj.movimientos.some((m) => normalizarConcepto(m.concepto) === normalizarConcepto(gf.concepto))
   );
+  const editable = mesObj.estado === 'activo';
+  const movs = mesObj.detalleDisponible ? movimientosConSaldo(mesObj) : [];
+  const saldoCalculado = mesObj.detalleDisponible ? (movs.length ? movs[movs.length - 1].saldo : 0) : undefined;
 
   let html = renderEncabezadoMes(mesObj);
 
@@ -266,7 +353,8 @@ function renderEstadoDeCuenta() {
   }
   html += `</div>`;
 
-  html += renderAvisosYRecordatorios(mesObj, gastosFijosPendientes);
+  html += renderRecordatorioFijo(gastosFijosPendientes);
+  html += renderAlertas(mesObj, saldoCalculado);
 
   if (!mesObj.detalleDisponible) {
     html += `
@@ -276,17 +364,6 @@ function renderEstadoDeCuenta() {
       </div>`;
     cont.innerHTML = html;
     return;
-  }
-
-  const movs = movimientosConSaldo(mesObj);
-  const editable = mesObj.estado === 'activo';
-  const saldoCalculado = movs.length ? movs[movs.length - 1].saldo : 0;
-
-  if (mesObj.saldoFinalRegistrado !== undefined && !editable && saldoCalculado !== mesObj.saldoFinalRegistrado) {
-    html += `
-      <div class="aviso aviso--alerta">
-        <p>⚠️ El saldo calculado a partir de los movimientos (${formatMoney(saldoCalculado)}) no coincide con el saldo de cierre del documento original (${formatMoney(mesObj.saldoFinalRegistrado)}). Revisar antes de dar por bueno este mes.</p>
-      </div>`;
   }
 
   html += `
@@ -493,6 +570,22 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
+    case 'toggle-alertas-panel':
+      alertasPanelAbierto = !alertasPanelAbierto;
+      formAlertaAbierto = false;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'abrir-form-alerta':
+      formAlertaAbierto = true;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'cerrar-form-alerta':
+      formAlertaAbierto = false;
+      renderEstadoDeCuenta();
+      break;
+
     case 'abrir-form-movimiento':
       formMovimientoAbierto = true;
       renderEstadoDeCuenta();
@@ -616,6 +709,12 @@ function onEstadoCuentaSubmit(e) {
 
     agregarGastoPrevisto(mesObj, { concepto, importeEstimado, nota });
     formPrevistoAbierto = false;
+    persistirYRenderizar();
+  }
+
+  if (form.id === 'form-alerta') {
+    agregarAlertaPersonalizada(mesObj, form.texto.value);
+    formAlertaAbierto = false;
     persistirYRenderizar();
   }
 
@@ -762,6 +861,7 @@ function onRespaldoClick(e) {
       const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
       const activo = meses.find((m) => m.estado === 'activo');
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
+      prepararMesActivo();
       resetEstadosDeInteraccion();
 
       renderSelectorHogares();
@@ -787,6 +887,7 @@ function onAvisoPointerDown(e) {
   swipeEstado = {
     pointerId: e.pointerId,
     id: contenedor.dataset.avisoId,
+    tipo: contenedor.dataset.tipo || 'sistema',
     startX: e.clientX,
     startY: e.clientY,
     dx: 0,
@@ -822,7 +923,7 @@ function onAvisoPointerMove(e) {
 
 function onAvisoPointerUp(e) {
   if (!swipeEstado || e.pointerId !== swipeEstado.pointerId) return;
-  const { elFrente, arrastrando, dx, id } = swipeEstado;
+  const { elFrente, arrastrando, dx, id, tipo } = swipeEstado;
   elFrente.removeEventListener('pointermove', onAvisoPointerMove);
   elFrente.removeEventListener('pointerup', onAvisoPointerUp);
   elFrente.removeEventListener('pointercancel', onAvisoPointerUp);
@@ -830,7 +931,18 @@ function onAvisoPointerUp(e) {
   if (arrastrando) {
     elFrente.style.transition = 'transform 0.2s ease';
     if (dx > UMBRAL_SWIPE_DESCARTAR) {
-      avisosDescartados.add(id);
+      if (tipo === 'personalizada') {
+        // Es una alerta creada por el usuario: deslizar la borra de verdad.
+        const mesObj = getMesActual();
+        if (mesObj) {
+          eliminarAlertaPersonalizada(mesObj, id);
+          saveState(state);
+        }
+      } else {
+        // Es una notificación del sistema (recordatorio/alerta calculada):
+        // deslizar solo la oculta de esta vista, no borra ningún dato.
+        avisosDescartados.add(id);
+      }
       if (avisoAbiertoId === id) avisoAbiertoId = null;
       renderEstadoDeCuenta();
     } else {

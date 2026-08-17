@@ -22,14 +22,16 @@ const SEED_STATE = {
           importe: 4819,
           activo: true,
         },
-        // El importe real varía envío a envío (históricamente $100), así que
-        // el recordatorio solo prefiletea un valor de referencia: el importe
-        // real se confirma a mano contra el comprobante antes de registrar.
+      ],
+      // A diferencia de un gasto fijo (importe exacto conocido, como
+      // bombas), estos son recurrentes pero de importe variable — por eso
+      // se sugieren como gasto PREVISTO de cada mes activo (no como
+      // alerta): el importe se confirma a mano contra el comprobante real.
+      previstosRecurrentes: [
         {
-          id: 'gf-colonia-envio-sobre',
+          id: 'pr-colonia-envio-sobre',
           concepto: 'Envío de sobre (Rutas del Plata / Núñez)',
-          importe: 100,
-          activo: true,
+          importeEstimado: 100,
           nota: 'El importe varía (aprox. $100 a $130): confirmar con el comprobante real.',
         },
       ],
@@ -60,6 +62,7 @@ const SEED_STATE = {
           ],
           saldoFinalRegistrado: 3,
           gastosPrevistos: [],
+          alertasPersonalizadas: [],
         },
         '2026-07': {
           mes: '2026-07',
@@ -84,6 +87,7 @@ const SEED_STATE = {
           ],
           saldoFinalRegistrado: 8,
           gastosPrevistos: [],
+          alertasPersonalizadas: [],
         },
         '2026-08': {
           mes: '2026-08',
@@ -104,6 +108,7 @@ const SEED_STATE = {
             { id: 'prev-1', concepto: '2 recargas Río Gas', importeEstimado: 2682, confirmado: false, nota: '' },
             { id: 'prev-2', concepto: 'Antel', importeEstimado: 3400, confirmado: false, nota: 'Importe pendiente de confirmar, NO confirmado' },
           ],
+          alertasPersonalizadas: [],
         },
       },
     },
@@ -142,8 +147,27 @@ function loadState() {
   }
   let huboCambios = completarHistoricoDesdeSemilla(state);
   if (completarGastosFijosDesdeSemilla(state)) huboCambios = true;
+  if (quitarGastosFijosObsoletos(state)) huboCambios = true;
   if (huboCambios) saveState(state);
   return state;
+}
+
+// Ids de gastos fijos que existieron en versiones anteriores de la app y
+// se dieron de baja (ej. "envío de sobre" pasó a sugerirse como gasto
+// previsto en vez de aparecer como recordatorio fijo). Se quitan de los
+// dispositivos que ya los tenían guardados; no afecta ningún movimiento ni
+// previsto real, solo esta configuración de recordatorios.
+const GASTOS_FIJOS_OBSOLETOS = ['gf-colonia-envio-sobre'];
+
+function quitarGastosFijosObsoletos(state) {
+  let cambio = false;
+  Object.values(state.hogares || {}).forEach((hogar) => {
+    if (!hogar.gastosFijos) return;
+    const cantidadAntes = hogar.gastosFijos.length;
+    hogar.gastosFijos = hogar.gastosFijos.filter((gf) => !GASTOS_FIJOS_OBSOLETOS.includes(gf.id));
+    if (hogar.gastosFijos.length !== cantidadAntes) cambio = true;
+  });
+  return cambio;
 }
 
 // El dispositivo guarda su propia copia del estado en localStorage, así que
@@ -404,4 +428,54 @@ function descargarArchivo(nombreArchivo, contenido, tipoMime) {
 // un respaldo de esta app, antes de reemplazar los datos del dispositivo.
 function esRespaldoValido(obj) {
   return !!obj && typeof obj === 'object' && obj.hogares && typeof obj.hogares === 'object';
+}
+
+// Gastos recurrentes de importe variable (ej. envío de sobre): a diferencia
+// de un gasto fijo, se sugieren como gasto PREVISTO del mes activo en vez
+// de aparecer como recordatorio. Solo se agregan si el mes está activo y
+// todavía no hay ni un previsto ni un movimiento real con ese concepto —
+// así nunca se duplican ni se pisa algo que el usuario ya cargó a mano.
+function asegurarPrevistosRecurrentes(hogar, mesObj) {
+  if (mesObj.estado !== 'activo') return false;
+  const normalizar = (s) => s.toLowerCase().trim();
+  let cambio = false;
+  mesObj.gastosPrevistos = mesObj.gastosPrevistos || [];
+  (hogar.previstosRecurrentes || []).forEach((pr) => {
+    const yaComoPrevisto = mesObj.gastosPrevistos.some((p) => normalizar(p.concepto) === normalizar(pr.concepto));
+    const yaComoMovimiento = (mesObj.movimientos || []).some((m) => normalizar(m.concepto).includes(normalizar(pr.concepto).split(' (')[0]));
+    if (!yaComoPrevisto && !yaComoMovimiento) {
+      mesObj.gastosPrevistos.push({
+        id: generarId('prev'),
+        concepto: pr.concepto,
+        importeEstimado: pr.importeEstimado,
+        confirmado: false,
+        nota: pr.nota || '',
+      });
+      cambio = true;
+    }
+  });
+  return cambio;
+}
+
+// Días que faltan para el último día del mes (para las alertas de cierre).
+// Puede dar negativo si ya pasó; se usa solo si el mes sigue activo.
+function diasRestantesParaCerrar(mesKey) {
+  const hoy = new Date();
+  const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+  const fin = ultimoDiaMes(mesKey);
+  const msPorDia = 24 * 60 * 60 * 1000;
+  return Math.round((new Date(`${fin}T00:00:00`) - new Date(`${hoyISO}T00:00:00`)) / msPorDia);
+}
+
+function agregarAlertaPersonalizada(mesObj, texto) {
+  const limpio = (texto || '').trim();
+  if (!limpio) return null;
+  const alerta = { id: generarId('alerta'), texto: limpio };
+  mesObj.alertasPersonalizadas = mesObj.alertasPersonalizadas || [];
+  mesObj.alertasPersonalizadas.push(alerta);
+  return alerta;
+}
+
+function eliminarAlertaPersonalizada(mesObj, id) {
+  mesObj.alertasPersonalizadas = (mesObj.alertasPersonalizadas || []).filter((a) => a.id !== id);
 }

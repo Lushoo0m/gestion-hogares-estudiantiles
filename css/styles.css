@@ -285,9 +285,8 @@ main {
   color: var(--azul);
 }
 
-/* Ajustes y recordatorios: solo íconos por defecto, el mensaje se
-   despliega debajo al tocar uno (uno solo a la vez) y se descarta
-   deslizándolo hacia la derecha. */
+/* Recordatorio de gasto fijo: solo ícono por defecto, el mensaje se
+   despliega debajo al tocarlo y se descarta deslizándolo hacia la derecha. */
 .avisos-iconos {
   display: flex;
   gap: 0.5rem;
@@ -345,6 +344,70 @@ main {
   user-select: none;
 }
 
+/* Panel de Alertas: campana con contador, desplegable, con filas finas de
+   solo texto (sin ninguna acción) y scroll si hay más de dos. */
+.btn-alertas {
+  position: relative;
+  border: 1px solid var(--borde);
+  background: var(--superficie-alta);
+  color: var(--texto);
+  font-size: 1.05rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+
+.btn-alertas__contador {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  background: var(--rojo);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+.alertas-panel {
+  max-height: 5.2rem;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+  padding-right: 0.15rem;
+}
+
+.alertas-panel__vacio {
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+}
+
+.aviso-swipe--fino {
+  margin-bottom: 0.4rem;
+  border-radius: 4px;
+}
+
+.aviso-swipe__frente--fino {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  border-left-width: 2px;
+  display: block;
+}
+
+.burbuja-agregar--alerta {
+  border-color: var(--rojo);
+  background: rgba(226, 104, 92, 0.1);
+  color: var(--rojo);
+}
+
 .aviso,
 .aviso-vacio {
   background: var(--superficie-alta);
@@ -352,12 +415,6 @@ main {
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.9rem;
-}
-
-.aviso--alerta {
-  background: rgba(226, 104, 92, 0.12);
-  border-color: var(--rojo);
-  color: #f2b8b1;
 }
 
 .tabla-movimientos {
