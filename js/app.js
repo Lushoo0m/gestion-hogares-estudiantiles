@@ -26,9 +26,28 @@ let archivoImportarNombre = null;
 let avisosDescartados = new Set(); // ids de alertas de sistema deslizadas en esta vista
 let swipeEstado = null; // seguimiento del gesto de deslizar en curso
 let alertasPanelAbierto = false; // panel de Alertas (campana con contador)
-let formAlertaAbierto = false; // burbuja "+ Agregar alerta" dentro del panel
+let formAlertaAbierto = false; // formulario de alerta nueva (se abre con el "+" de al lado de la campana)
 let editandoPresupuesto = false; // tarjeta de Presupuesto en modo edición
 let formNuevoMesAbierto = false; // burbuja "+" para crear el mes siguiente
+let vistaActual = 'colonia'; // 'colonia' | 'finanzas' — qué botón está activo arriba
+
+// Finanzas es un gestor paralelo (plata personal, sin ciclo mensual que se
+// cierre): alterna qué contenedores se ven sin tocar el estado de ninguno
+// de los dos, así cada uno sigue donde estaba al volver a él.
+function mostrarVista(vista) {
+  vistaActual = vista;
+  const esColonia = vista === 'colonia';
+  document.getElementById('selector-meses').hidden = !esColonia;
+  document.getElementById('estado-cuenta').hidden = !esColonia;
+  document.getElementById('finanzas-selector-meses').hidden = esColonia;
+  document.getElementById('finanzas-cuenta').hidden = esColonia;
+  const subtitulo = document.getElementById('subtitulo');
+  if (subtitulo) {
+    subtitulo.textContent = esColonia
+      ? `Registro de gastos — Hogar ${state.hogares[hogarSeleccionado].nombre}`
+      : 'Finanzas personales';
+  }
+}
 
 function prepararMesActivo() {
   const hogar = state.hogares[hogarSeleccionado];
@@ -42,10 +61,12 @@ function init() {
   mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
   prepararMesActivo();
 
+  mostrarVista('colonia');
   renderSelectorHogares();
   renderSelectorMeses();
   renderEstadoDeCuenta();
   renderRespaldo();
+  initFinanzas();
 
   document.getElementById('estado-cuenta').addEventListener('click', onEstadoCuentaClick);
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
@@ -80,7 +101,7 @@ function renderSelectorHogares() {
   cont.innerHTML = '';
   getHogaresHabilitados(state).forEach((hogar) => {
     const btn = document.createElement('button');
-    btn.className = 'tab' + (hogar.id === hogarSeleccionado ? ' tab--activo' : '');
+    btn.className = 'tab' + (vistaActual === 'colonia' && hogar.id === hogarSeleccionado ? ' tab--activo' : '');
     btn.textContent = hogar.nombre;
     btn.addEventListener('click', () => {
       hogarSeleccionado = hogar.id;
@@ -89,12 +110,23 @@ function renderSelectorHogares() {
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
       prepararMesActivo();
       resetEstadosDeInteraccion();
+      mostrarVista('colonia');
       renderSelectorHogares();
       renderSelectorMeses();
       renderEstadoDeCuenta();
     });
     cont.appendChild(btn);
   });
+
+  const btnFinanzas = document.createElement('button');
+  btnFinanzas.className = 'tab' + (vistaActual === 'finanzas' ? ' tab--activo' : '');
+  btnFinanzas.textContent = 'Finanzas';
+  btnFinanzas.addEventListener('click', () => {
+    mostrarVista('finanzas');
+    renderSelectorHogares();
+    renderFinanzas();
+  });
+  cont.appendChild(btnFinanzas);
 }
 
 // Solo se muestran los meses que ya existen, más un "+" (mismo lenguaje
@@ -360,8 +392,6 @@ function renderAlertas(mesObj, saldoCalculado) {
             <button type="button" data-action="cerrar-form-alerta">Cancelar</button>
           </div>
         </form>`;
-    } else {
-      html += `<button type="button" class="burbuja-agregar burbuja-agregar--alerta" data-action="abrir-form-alerta">+ Agregar alerta</button>`;
     }
   }
 
@@ -655,11 +685,6 @@ function onEstadoCuentaClick(e) {
       renderEstadoDeCuenta();
       break;
 
-    case 'abrir-form-alerta':
-      formAlertaAbierto = true;
-      renderEstadoDeCuenta();
-      break;
-
     case 'cerrar-form-alerta':
       formAlertaAbierto = false;
       renderEstadoDeCuenta();
@@ -851,7 +876,7 @@ function renderRespaldo() {
   if (respaldoAbierto === 'exportar') {
     html += `
       <div class="confirmar-accion-mes">
-        <span>📤 ¿Descargar un respaldo completo (todos los Hogares y meses guardados en este dispositivo)?</span>
+        <span>📤 ¿Descargar un respaldo completo (todos los Hogares, Finanzas y meses guardados en este dispositivo)?</span>
         <button type="button" class="btn-confirmar btn-confirmar--azul" data-action="confirmar-exportar">Confirmar</button>
         <button type="button" class="btn-cancelar" data-action="cancelar-respaldo">Cancelar</button>
       </div>`;

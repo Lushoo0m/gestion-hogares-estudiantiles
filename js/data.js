@@ -121,6 +121,16 @@ const SEED_STATE = {
       meses: {},
     },
   },
+  // Finanzas personales: paralelo e independiente de los Hogares. A
+  // diferencia de esos meses (que se cierran y quedan de solo lectura),
+  // acá es un registro continuo — nunca se "cierra" nada, todo queda
+  // siempre editable. Se agrupa por mes solo para poder verlo ordenado.
+  finanzas: {
+    movimientos: [],
+    gastosPrevistos: [],
+    inversiones: [],
+    alertas: [],
+  },
 };
 
 function clone(obj) {
@@ -147,8 +157,27 @@ function loadState() {
   if (quitarGastosFijosObsoletos(state)) huboCambios = true;
   if (completarPrevistosRecurrentesDesdeSemilla(state)) huboCambios = true;
   if (corregirMesesActivosDuplicados(state)) huboCambios = true;
+  if (completarFinanzasDesdeSemilla(state)) huboCambios = true;
   if (huboCambios) saveState(state);
   return state;
+}
+
+// Los dispositivos que guardaron datos antes de que existiera Finanzas no
+// tienen ese campo. Se agrega vacío (nunca se inventa un movimiento, una
+// inversión ni una alerta) sin tocar nada de lo que ya tenían guardado.
+function completarFinanzasDesdeSemilla(state) {
+  let cambio = false;
+  if (!state.finanzas) {
+    state.finanzas = clone(SEED_STATE.finanzas);
+    return true;
+  }
+  ['movimientos', 'gastosPrevistos', 'inversiones', 'alertas'].forEach((campo) => {
+    if (!Array.isArray(state.finanzas[campo])) {
+      state.finanzas[campo] = [];
+      cambio = true;
+    }
+  });
+  return cambio;
 }
 
 // Ids de gastos fijos que existieron en versiones anteriores de la app y
@@ -592,4 +621,81 @@ function agregarAlertaPersonalizada(mesObj, texto) {
 
 function eliminarAlertaPersonalizada(mesObj, id) {
   mesObj.alertasPersonalizadas = (mesObj.alertasPersonalizadas || []).filter((a) => a.id !== id);
+}
+
+// ---------------------------------------------------------------------
+// Finanzas personales: registro continuo, independiente de los Hogares.
+// Reutiliza a propósito agregarMovimiento/actualizarMovimiento/
+// eliminarMovimiento/movimientosConSaldo/agregarGastoPrevisto/
+// eliminarGastoPrevisto/confirmarGastoPrevisto de más arriba — todas esas
+// funciones solo tocan .movimientos/.gastosPrevistos, así que sirven igual
+// pasándoles state.finanzas en vez de un mesObj de Hogar.
+// ---------------------------------------------------------------------
+
+// Meses para agrupar la vista (nunca se "crean" ni se "cierran": surgen
+// solos de las fechas ya cargadas), más el mes real en curso aunque todavía
+// no tenga ningún movimiento, para siempre tener dónde empezar a cargar.
+function getMesesFinanzasOrdenados(finanzas) {
+  const claves = new Set((finanzas.movimientos || []).map((m) => m.fecha.slice(0, 7)));
+  const hoy = new Date();
+  claves.add(`${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`);
+  return Array.from(claves).sort();
+}
+
+function agregarInversion(finanzas, { nombre, tipo, valorActual, nota }) {
+  const inversion = {
+    id: generarId('inv'),
+    nombre: normalizarConceptoIngresado(nombre),
+    tipo: tipo || 'otro',
+    valorActual: Math.round(Number(valorActual)),
+    nota: (nota || '').trim(),
+  };
+  finanzas.inversiones = finanzas.inversiones || [];
+  finanzas.inversiones.push(inversion);
+  return inversion;
+}
+
+function actualizarInversion(finanzas, id, cambios) {
+  const inv = (finanzas.inversiones || []).find((i) => i.id === id);
+  if (!inv) return;
+  if (cambios.nombre !== undefined) inv.nombre = normalizarConceptoIngresado(cambios.nombre);
+  if (cambios.tipo !== undefined) inv.tipo = cambios.tipo;
+  if (cambios.valorActual !== undefined) inv.valorActual = Math.round(Number(cambios.valorActual));
+  if (cambios.nota !== undefined) inv.nota = (cambios.nota || '').trim();
+}
+
+function eliminarInversion(finanzas, id) {
+  finanzas.inversiones = (finanzas.inversiones || []).filter((i) => i.id !== id);
+}
+
+const TIPOS_INVERSION = [
+  { id: 'itau', label: 'Itaú Asset Management' },
+  { id: 'crypto', label: 'Crypto' },
+  { id: 'inmueble', label: 'Bienes raíces' },
+  { id: 'otro', label: 'Otro' },
+];
+
+function tipoInversionLabel(tipoId) {
+  const encontrado = TIPOS_INVERSION.find((t) => t.id === tipoId);
+  return encontrado ? encontrado.label : 'Otro';
+}
+
+// Alertas de Finanzas: siempre manuales (facturas pendientes, revisar una
+// inversión, lo que haga falta recordar), nunca calculadas por la app. El
+// color lo elige la persona al crearla, para marcar la gravedad que ella
+// le quiera dar — amarillo (aviso) o rojo (urgente).
+const MAX_ALERTAS_FINANZAS = 15;
+
+function agregarAlertaFinanzas(finanzas, texto, color) {
+  const limpio = (texto || '').trim();
+  if (!limpio) return null;
+  finanzas.alertas = finanzas.alertas || [];
+  if (finanzas.alertas.length >= MAX_ALERTAS_FINANZAS) return 'limite';
+  const alerta = { id: generarId('alerta-fin'), texto: limpio, color: color === 'rojo' ? 'rojo' : 'amarillo' };
+  finanzas.alertas.push(alerta);
+  return alerta;
+}
+
+function eliminarAlertaFinanzas(finanzas, id) {
+  finanzas.alertas = (finanzas.alertas || []).filter((a) => a.id !== id);
 }

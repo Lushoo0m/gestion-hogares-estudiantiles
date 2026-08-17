@@ -19,6 +19,14 @@
   box-sizing: border-box;
 }
 
+/* Sin esto, los display:flex/block de los contenedores más abajo (mismo
+   selector por id) le ganan en especificidad al [hidden] del navegador y
+   el elemento se ve igual aunque esté "oculto" — pasa al alternar entre
+   Colonia y Finanzas. */
+[hidden] {
+  display: none !important;
+}
+
 html {
   overflow-x: hidden;
 }
@@ -81,8 +89,11 @@ main {
   color: #fff;
 }
 
-/* Tira de meses del ciclo (jun-jul-ago-...-may) */
-#selector-meses {
+/* Tira de meses del ciclo (jun-jul-ago-...-may); #finanzas-selector-meses
+   comparte el mismo look (chips, sin candado ni "+": los meses de Finanzas
+   surgen solos de las fechas cargadas). */
+#selector-meses,
+#finanzas-selector-meses {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -186,7 +197,8 @@ main {
   color: #10151a;
 }
 
-#estado-cuenta {
+#estado-cuenta,
+#finanzas-cuenta {
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 10px;
@@ -496,17 +508,49 @@ main {
 }
 
 .aviso-swipe__frente--fino {
-  background: #363f48;
-  border-left: 2px solid #4b5560;
-  color: #fff;
+  background: #3d331a;
+  border-left: 2px solid var(--amarillo);
+  color: #f2ddb0;
   padding: 0.4rem 0.6rem;
   font-size: 0.82rem;
   display: block;
 }
 
-.burbuja-agregar--alerta {
+/* Alertas de Finanzas en rojo: la persona elige la gravedad al crearlas. */
+.aviso-swipe__frente--fino-rojo {
+  background: #3f2320;
+  border-left: 2px solid var(--rojo);
+  color: #f5c6c0;
+}
+
+/* Elegir color (gravedad) al crear una alerta de Finanzas. */
+.selector-color-alerta {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.3rem 0 0.6rem;
+}
+
+.btn-color-alerta {
+  flex: 1;
+  border: 1px solid var(--borde);
+  background: none;
+  color: var(--texto-secundario);
+  padding: 0.4rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-color-alerta--amarillo.btn-color-alerta--elegido {
+  border-color: var(--amarillo);
+  background: rgba(217, 164, 65, 0.14);
+  color: var(--amarillo);
+}
+
+.btn-color-alerta--rojo.btn-color-alerta--elegido {
   border-color: var(--rojo);
-  background: rgba(226, 104, 92, 0.1);
+  background: rgba(226, 104, 92, 0.14);
   color: var(--rojo);
 }
 
@@ -601,6 +645,13 @@ main {
   font-style: italic;
 }
 
+/* Etiqueta neutra (ej. el tipo de una inversión): a diferencia de .nota,
+   no es una advertencia, así que no lleva el rojo de alerta. */
+.previstos .etiqueta-secundaria {
+  color: var(--texto-secundario);
+  font-style: normal;
+}
+
 /* Burbuja desplegable: reemplaza a las secciones "Agregar movimiento" /
    "Agregar previsto" siempre visibles. Colapsada es un botón chico; al
    tocarla se despliega en el mismo lugar como un formulario. */
@@ -645,6 +696,28 @@ main {
 }
 
 .aviso-previstos {
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+}
+
+/* Inversiones (Finanzas): misma caja que Gastos previstos, en azul para
+   distinguirla a simple vista. */
+.caja-inversiones {
+  margin-top: 1rem;
+  border: 1px solid var(--azul);
+  background: var(--azul-tenue);
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.caja-inversiones__titulo {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--azul);
+  margin-bottom: 0.5rem;
+}
+
+.aviso-inversiones {
   font-size: 0.85rem;
   color: var(--texto-secundario);
 }
