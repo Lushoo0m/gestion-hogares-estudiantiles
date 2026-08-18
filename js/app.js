@@ -42,6 +42,7 @@ function mostrarVista(vista) {
   document.getElementById('estado-cuenta').hidden = !esColonia;
   document.getElementById('finanzas-selector-meses').hidden = esColonia;
   document.getElementById('finanzas-cuenta').hidden = esColonia;
+  document.getElementById('finanzas-inversiones').hidden = esColonia;
   const subtitulo = document.getElementById('subtitulo');
   if (subtitulo) {
     subtitulo.textContent = esColonia

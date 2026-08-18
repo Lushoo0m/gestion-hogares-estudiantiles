@@ -18,6 +18,7 @@ let finConfirmandoPrevistoId = null;
 let finConceptosExpandidos = new Set();
 let finFormInversionAbierto = false;
 let finEditandoInversionId = null;
+let finInversionesAbierto = false; // panel de Inversiones: independiente, plegado por default
 let finAlertasPanelAbierto = false;
 let finFormAlertaAbierto = false;
 let finColorAlertaElegido = 'amarillo';
@@ -28,6 +29,12 @@ function initFinanzas() {
   document.getElementById('finanzas-cuenta').addEventListener('click', onFinCuentaClick);
   document.getElementById('finanzas-cuenta').addEventListener('submit', onFinCuentaSubmit);
   document.getElementById('finanzas-cuenta').addEventListener('pointerdown', onFinAvisoPointerDown);
+  // Inversiones vive en su propia sección, separada de la tarjeta de saldo
+  // (mismo espíritu que Exportar/Importar en #respaldo), pero reutiliza los
+  // mismos handlers de click/submit: solo miran el data-action/form.id, no
+  // les importa desde qué contenedor los dispara el evento.
+  document.getElementById('finanzas-inversiones').addEventListener('click', onFinCuentaClick);
+  document.getElementById('finanzas-inversiones').addEventListener('submit', onFinCuentaSubmit);
 }
 
 function resetEstadosDeInteraccionFinanzas() {
@@ -39,6 +46,7 @@ function resetEstadosDeInteraccionFinanzas() {
   finPrevistosPanelAbierto = false;
   finFormInversionAbierto = false;
   finEditandoInversionId = null;
+  finInversionesAbierto = false;
   finAlertasPanelAbierto = false;
   finFormAlertaAbierto = false;
 }
@@ -57,6 +65,7 @@ function renderFinanzas() {
   }
   renderFinSelectorMeses(meses);
   renderFinCuenta(fin);
+  renderFinInversionesSeccion(fin);
 }
 
 // Chips de mes, mismo lenguaje visual que los Hogares pero sin candado ni
@@ -161,7 +170,6 @@ function renderFinCuenta(fin) {
   }
 
   html += renderFinPrevistos(fin);
-  html += renderFinInversiones(fin);
 
   cont.innerHTML = html;
 }
@@ -350,6 +358,23 @@ function renderFinInversiones(fin) {
   return html;
 }
 
+// Inversiones vive en su propia sección, separada de la tarjeta de saldo
+// total — mismo lenguaje visual que Exportar/Importar en #respaldo: un
+// ícono solo por default, que al tocarlo despliega el contenido completo
+// (torta, lista, formulario) debajo.
+function renderFinInversionesSeccion(fin) {
+  const cont = document.getElementById('finanzas-inversiones');
+  if (!cont) return;
+  let html = `
+    <div class="respaldo-caja">
+      <button type="button" class="btn-respaldo-icono btn-respaldo-icono--azul" data-action="fin-toggle-inversiones" title="Inversiones">📊</button>
+    </div>`;
+  if (finInversionesAbierto) {
+    html += renderFinInversiones(fin);
+  }
+  cont.innerHTML = html;
+}
+
 // Alertas de Finanzas: siempre manuales (facturas pendientes, revisar una
 // inversión, lo que haga falta), nunca calculadas. El color (gravedad) lo
 // elige la persona al crearlas. Mismo lenguaje visual que las alertas de
@@ -490,6 +515,13 @@ function onFinCuentaClick(e) {
       }
       break;
     }
+
+    case 'fin-toggle-inversiones':
+      finInversionesAbierto = !finInversionesAbierto;
+      finFormInversionAbierto = false;
+      finEditandoInversionId = null;
+      renderFinanzas();
+      break;
 
     case 'fin-abrir-form-inversion':
       finFormInversionAbierto = true;

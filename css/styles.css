@@ -1008,6 +1008,20 @@ form select {
   margin: 0 0.5rem;
 }
 
+/* Inversiones (Finanzas): mismo lenguaje que Exportar/Importar, en azul
+   para mantener su color habitual. */
+.btn-respaldo-icono--azul {
+  border-color: var(--azul);
+  background: var(--azul-tenue);
+  color: var(--azul);
+}
+
+#finanzas-inversiones {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--borde);
+}
+
 .respaldo-panel {
   display: flex;
   align-items: center;
