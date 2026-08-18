@@ -171,7 +171,7 @@ function renderFinCuenta(fin) {
 // aparecen como hijos anidados debajo del botón grande.
 function renderFinPrevistos(fin) {
   let html = `
-    <div class="previstos-encabezado">
+    <div class="previstos-encabezado burbuja-agregar burbuja-agregar--previsto">
       <button type="button" class="btn-previstos" data-action="fin-toggle-previstos-panel">⚠️ Gastos previstos o pendientes</button>
       <button type="button" class="btn-previsto-agregar" data-action="fin-previsto-agregar-rapido" title="Agregar previsto">+</button>
     </div>`;

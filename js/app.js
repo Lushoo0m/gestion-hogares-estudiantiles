@@ -529,7 +529,7 @@ function renderEstadoDeCuenta() {
   // los previstos aparecen anidados debajo del botón grande.
   if (mesObj.estado === 'activo') {
     html += `
-      <div class="previstos-encabezado">
+      <div class="previstos-encabezado burbuja-agregar burbuja-agregar--previsto">
         <button type="button" class="btn-previstos" data-action="toggle-previstos-panel">⚠️ Gastos previstos o pendientes</button>
         <button type="button" class="btn-previsto-agregar" data-action="previsto-agregar-rapido" title="Agregar previsto">+</button>
       </div>`;
