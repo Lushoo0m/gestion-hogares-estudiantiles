@@ -16,6 +16,7 @@ let confirmandoPrevistoId = null;
 let conceptosExpandidos = new Set();
 let formMovimientoAbierto = false;
 let formPrevistoAbierto = false;
+let previstosPanelAbierto = false; // panel de Gastos previstos (plegado por default)
 let accionesMesExpandido = false;
 let confirmandoAccionMes = null; // 'cerrar' | 'reabrir' | 'eliminar-preparado' | null
 let indicadorExpandido = false;
@@ -82,6 +83,7 @@ function resetEstadosDeInteraccion() {
   conceptosExpandidos.clear();
   formMovimientoAbierto = false;
   formPrevistoAbierto = false;
+  previstosPanelAbierto = false;
   accionesMesExpandido = false;
   confirmandoAccionMes = null;
   indicadorExpandido = false;
@@ -522,64 +524,67 @@ function renderEstadoDeCuenta() {
   }
 
   // Los gastos previstos solo tienen sentido en el mes que está
-  // transcurriendo: un mes cerrado no muestra esta sección.
+  // transcurriendo: un mes cerrado no muestra esta sección. Plegado por
+  // default (icono + texto + "+"), sin ocupar espacio de más; al tocarlo,
+  // los previstos aparecen anidados debajo del botón grande.
   if (mesObj.estado === 'activo') {
-    html += '<div class="caja-previstos">';
-    html += '<div class="caja-previstos__titulo">⚠️ Gastos previstos</div>';
+    html += `
+      <div class="previstos-encabezado">
+        <button type="button" class="btn-previstos" data-action="toggle-previstos-panel">⚠️ Gastos previstos o pendientes</button>
+        <button type="button" class="btn-previsto-agregar" data-action="previsto-agregar-rapido" title="Agregar previsto">+</button>
+      </div>`;
 
-    if (mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
-      html += '<ul class="previstos">';
-      mesObj.gastosPrevistos.forEach((p) => {
-        html += `<li>
-          <div class="previsto-mensaje">${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
-          <div class="previsto-acciones">
-            <button type="button" class="btn-confirmar-previsto" data-action="confirmar-previsto" data-id="${p.id}">✔ Confirmar gasto real</button>
-            <button type="button" class="btn-icono" data-action="eliminar-previsto" data-id="${p.id}" title="Eliminar">🗑️</button>
-          </div>`;
-        if (confirmandoPrevistoId === p.id) {
-          html += `
-            <form id="form-confirmar-previsto" data-previsto-id="${p.id}" class="form-inline">
-              <label>Fecha
-                <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}">
-              </label>
-              <label>Importe real ($)
-                <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado}">
-              </label>
-              <div class="acciones-form">
-                <button type="submit">Confirmar</button>
-                <button type="button" data-action="cancelar-confirmar-previsto">Cancelar</button>
-              </div>
-            </form>`;
-        }
-        html += '</li>';
-      });
-      html += '</ul>';
-    } else {
-      html += '<p class="aviso-previstos">No hay gastos previstos cargados para este mes.</p>';
+    if (previstosPanelAbierto) {
+      if (mesObj.gastosPrevistos && mesObj.gastosPrevistos.length) {
+        html += '<ul class="previstos previstos-anidado">';
+        mesObj.gastosPrevistos.forEach((p) => {
+          html += `<li>
+            <div class="previsto-mensaje">${p.concepto} — ${formatMoney(p.importeEstimado)}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
+            <div class="previsto-acciones">
+              <button type="button" class="btn-confirmar-previsto" data-action="confirmar-previsto" data-id="${p.id}">✔ Confirmar gasto real</button>
+              <button type="button" class="btn-icono" data-action="eliminar-previsto" data-id="${p.id}" title="Eliminar">🗑️</button>
+            </div>`;
+          if (confirmandoPrevistoId === p.id) {
+            html += `
+              <form id="form-confirmar-previsto" data-previsto-id="${p.id}" class="form-inline">
+                <label>Fecha
+                  <input type="date" name="fecha" required min="${primerDiaMes(mesObj.mes)}" max="${ultimoDiaMes(mesObj.mes)}">
+                </label>
+                <label>Importe real ($)
+                  <input type="number" name="importe" min="1" step="1" required value="${p.importeEstimado}">
+                </label>
+                <div class="acciones-form">
+                  <button type="submit">Confirmar</button>
+                  <button type="button" data-action="cancelar-confirmar-previsto">Cancelar</button>
+                </div>
+              </form>`;
+          }
+          html += '</li>';
+        });
+        html += '</ul>';
+      } else {
+        html += '<p class="aviso-previstos previstos-anidado">No hay gastos previstos cargados para este mes.</p>';
+      }
+
+      if (formPrevistoAbierto) {
+        html += `
+          <form id="form-previsto" class="form-burbuja previstos-anidado">
+            <label>Concepto
+              <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE">
+            </label>
+            <label>Importe estimado ($)
+              <input type="number" name="importeEstimado" min="1" step="1" required>
+            </label>
+            <label>Nota (opcional)
+              <input type="text" name="nota" placeholder="Ej: importe pendiente de confirmar">
+            </label>
+            <div class="acciones-form">
+              <button type="submit">Agregar previsto</button>
+              <button type="button" data-action="cerrar-form-previsto">Cancelar</button>
+            </div>
+          </form>`;
+      }
     }
-
-    if (formPrevistoAbierto) {
-      html += `
-        <form id="form-previsto" class="form-burbuja">
-          <label>Concepto
-            <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE">
-          </label>
-          <label>Importe estimado ($)
-            <input type="number" name="importeEstimado" min="1" step="1" required>
-          </label>
-          <label>Nota (opcional)
-            <input type="text" name="nota" placeholder="Ej: importe pendiente de confirmar">
-          </label>
-          <div class="acciones-form">
-            <button type="submit">Agregar previsto</button>
-            <button type="button" data-action="cerrar-form-previsto">Cancelar</button>
-          </div>
-        </form>`;
-    } else {
-      html += `<button type="button" class="burbuja-agregar burbuja-agregar--previsto" data-action="abrir-form-previsto">+ Agregar previsto</button>`;
-    }
-
-    html += '</div>';
   }
 
   cont.innerHTML = html;
@@ -737,7 +742,14 @@ function onEstadoCuentaClick(e) {
       break;
     }
 
-    case 'abrir-form-previsto':
+    case 'toggle-previstos-panel':
+      previstosPanelAbierto = !previstosPanelAbierto;
+      formPrevistoAbierto = false;
+      renderEstadoDeCuenta();
+      break;
+
+    case 'previsto-agregar-rapido':
+      previstosPanelAbierto = true;
       formPrevistoAbierto = true;
       renderEstadoDeCuenta();
       break;

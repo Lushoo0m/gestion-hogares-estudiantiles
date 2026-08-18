@@ -13,6 +13,7 @@ let finMesSeleccionado = null;
 let finEditandoMovId = null;
 let finFormMovimientoAbierto = false;
 let finFormPrevistoAbierto = false;
+let finPrevistosPanelAbierto = false; // panel de Gastos previstos (plegado por default)
 let finConfirmandoPrevistoId = null;
 let finConceptosExpandidos = new Set();
 let finFormInversionAbierto = false;
@@ -35,6 +36,7 @@ function resetEstadosDeInteraccionFinanzas() {
   finConceptosExpandidos.clear();
   finFormMovimientoAbierto = false;
   finFormPrevistoAbierto = false;
+  finPrevistosPanelAbierto = false;
   finFormInversionAbierto = false;
   finEditandoInversionId = null;
   finAlertasPanelAbierto = false;
@@ -164,12 +166,20 @@ function renderFinCuenta(fin) {
   cont.innerHTML = html;
 }
 
+// Plegado por default (icono + texto + "+"), sin caja ni borde propios:
+// no ocupa espacio si no se lo toca. Al desplegarlo, los previstos
+// aparecen como hijos anidados debajo del botón grande.
 function renderFinPrevistos(fin) {
-  let html = '<div class="caja-previstos">';
-  html += '<div class="caja-previstos__titulo">⚠️ Gastos previstos</div>';
+  let html = `
+    <div class="previstos-encabezado">
+      <button type="button" class="btn-previstos" data-action="fin-toggle-previstos-panel">⚠️ Gastos previstos o pendientes</button>
+      <button type="button" class="btn-previsto-agregar" data-action="fin-previsto-agregar-rapido" title="Agregar previsto">+</button>
+    </div>`;
+
+  if (!finPrevistosPanelAbierto) return html;
 
   if (fin.gastosPrevistos && fin.gastosPrevistos.length) {
-    html += '<ul class="previstos">';
+    html += '<ul class="previstos previstos-anidado">';
     fin.gastosPrevistos.forEach((p) => {
       html += `<li>
         <div class="previsto-mensaje">${p.concepto} — ${p.importeEstimado ? formatMoney(p.importeEstimado) : 'importe a confirmar'}${p.nota ? ` <span class="nota">(${p.nota})</span>` : ''}</div>
@@ -196,12 +206,12 @@ function renderFinPrevistos(fin) {
     });
     html += '</ul>';
   } else {
-    html += '<p class="aviso-previstos">No hay gastos previstos cargados.</p>';
+    html += '<p class="aviso-previstos previstos-anidado">No hay gastos previstos cargados.</p>';
   }
 
   if (finFormPrevistoAbierto) {
     html += `
-      <form id="fin-form-previsto" class="form-burbuja">
+      <form id="fin-form-previsto" class="form-burbuja previstos-anidado">
         <label>Concepto
           <input type="text" name="concepto" placeholder="Si no lo sabés, dejalo vacío: se guarda como CONCEPTO PENDIENTE">
         </label>
@@ -216,22 +226,59 @@ function renderFinPrevistos(fin) {
           <button type="button" data-action="fin-cerrar-form-previsto">Cancelar</button>
         </div>
       </form>`;
-  } else {
-    html += `<button type="button" class="burbuja-agregar burbuja-agregar--previsto" data-action="fin-abrir-form-previsto">+ Agregar previsto</button>`;
   }
 
-  html += '</div>';
   return html;
 }
 
 // Inversiones (Itaú, crypto, bienes raíces...): lista simple con el valor
 // que la persona cargó a mano. La app nunca calcula variaciones ni cotiza
 // nada sola — el recordatorio de revisarlas es una alerta manual más.
+// Paleta cíclica para las porciones de la torta: si hay más inversiones
+// que colores, se repiten (no debería pasar en la práctica).
+const COLORES_TORTA = ['#5aa9e6', '#4cbd8c', '#d9a441', '#e2685c', '#9b7ede', '#4dd0e1', '#f28fb1', '#8bc34a'];
+
+// Torta armada con conic-gradient puro (sin librerías): una porción por
+// inversión, proporcional a su valor actual sobre el total. Si no hay
+// ninguna inversión con valor cargado, no se dibuja nada.
+function renderTortaInversiones(inversiones) {
+  const total = inversiones.reduce((suma, inv) => suma + (inv.valorActual || 0), 0);
+  if (!total) return '';
+
+  let acumulado = 0;
+  const segmentos = inversiones.map((inv, i) => {
+    const color = COLORES_TORTA[i % COLORES_TORTA.length];
+    const inicio = (acumulado / total) * 360;
+    acumulado += inv.valorActual || 0;
+    const fin = (acumulado / total) * 360;
+    return { color, inicio, fin };
+  });
+  const gradiente = segmentos.map((s) => `${s.color} ${s.inicio}deg ${s.fin}deg`).join(', ');
+
+  const leyenda = inversiones
+    .map((inv, i) => {
+      const pct = Math.round(((inv.valorActual || 0) / total) * 100);
+      return `<li><span class="torta-leyenda__punto" style="background:${COLORES_TORTA[i % COLORES_TORTA.length]}"></span>${inv.nombre} — ${pct}%</li>`;
+    })
+    .join('');
+
+  return `
+    <div class="torta-inversiones-caja">
+      <div class="torta-inversiones" style="background: conic-gradient(${gradiente})"></div>
+      <div class="torta-leyenda">
+        <div class="torta-leyenda__total">Dinero actual: <strong>${formatMoney(total)}</strong></div>
+        <ul>${leyenda}</ul>
+      </div>
+    </div>`;
+}
+
 function renderFinInversiones(fin) {
   let html = '<div class="caja-inversiones">';
   html += '<div class="caja-inversiones__titulo">📊 Inversiones</div>';
 
   const inversiones = fin.inversiones || [];
+  html += renderTortaInversiones(inversiones);
+
   if (inversiones.length) {
     html += '<ul class="previstos">';
     inversiones.forEach((inv) => {
@@ -407,7 +454,14 @@ function onFinCuentaClick(e) {
       break;
     }
 
-    case 'fin-abrir-form-previsto':
+    case 'fin-toggle-previstos-panel':
+      finPrevistosPanelAbierto = !finPrevistosPanelAbierto;
+      finFormPrevistoAbierto = false;
+      renderFinanzas();
+      break;
+
+    case 'fin-previsto-agregar-rapido':
+      finPrevistosPanelAbierto = true;
       finFormPrevistoAbierto = true;
       renderFinanzas();
       break;

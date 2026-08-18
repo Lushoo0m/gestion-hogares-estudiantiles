@@ -697,19 +697,45 @@ main {
   margin-top: 0.6rem;
 }
 
-.caja-previstos {
+/* Gastos previstos: plegado por default (icono + texto + "+"), sin caja ni
+   borde propios — así no ocupa espacio si no se lo toca. Al desplegarlo,
+   los previstos aparecen como hijos anidados debajo del botón grande. */
+.previstos-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-top: 1rem;
-  border: 1px solid var(--amarillo);
-  background: rgba(217, 164, 65, 0.08);
-  border-radius: 10px;
-  padding: 0.75rem;
 }
 
-.caja-previstos__titulo {
-  font-size: 0.9rem;
-  font-weight: 700;
+.btn-previstos {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: none;
   color: var(--amarillo);
-  margin-bottom: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.3rem 0.1rem;
+  cursor: pointer;
+}
+
+.btn-previsto-agregar {
+  border: 1px dashed var(--amarillo);
+  background: none;
+  color: var(--amarillo);
+  font-size: 1rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.previstos-anidado {
+  margin: 0.4rem 0 0 0.6rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--amarillo);
 }
 
 .aviso-previstos {
@@ -717,8 +743,8 @@ main {
   color: var(--texto-secundario);
 }
 
-/* Inversiones (Finanzas): misma caja que Gastos previstos, en azul para
-   distinguirla a simple vista. */
+/* Inversiones (Finanzas): caja propia en azul, a diferencia de Gastos
+   previstos (que quedó plegada, sin caja). */
 .caja-inversiones {
   margin-top: 1rem;
   border: 1px solid var(--azul);
@@ -737,6 +763,64 @@ main {
 .aviso-inversiones {
   font-size: 0.85rem;
   color: var(--texto-secundario);
+}
+
+/* Torta de inversiones: conic-gradient generado en JS (sin librerías), con
+   una leyenda de color/nombre/porcentaje al lado. */
+.torta-inversiones-caja {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.torta-inversiones {
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px var(--borde);
+}
+
+.torta-leyenda {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.torta-leyenda__total {
+  font-size: 0.85rem;
+  color: var(--texto-secundario);
+  margin-bottom: 0.4rem;
+}
+
+.torta-leyenda__total strong {
+  color: var(--texto);
+  font-size: 1rem;
+}
+
+.torta-leyenda ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.torta-leyenda__punto {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  flex-shrink: 0;
+}
+
+.torta-leyenda li {
+  display: flex;
+  align-items: center;
 }
 
 .celda-acciones {
