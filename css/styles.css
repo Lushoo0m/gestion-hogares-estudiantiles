@@ -67,8 +67,14 @@ main {
 
 #selector-hogares {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.selector-hogares__fila {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .tab {
@@ -87,6 +93,42 @@ main {
   background: var(--azul-fuerte);
   border-color: var(--azul-fuerte);
   color: #fff;
+}
+
+/* "Hogares": desplegable plegado por default (mismo lenguaje visual que
+   los demás paneles plegables de la app) — la flechita gira al abrirlo. */
+.tab__flecha {
+  display: inline-block;
+  margin-left: 0.15rem;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.tab--abierto .tab__flecha {
+  transform: rotate(180deg);
+}
+
+.menu-hogares-panel {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.menu-hogares-opcion {
+  flex: 1;
+  padding: 0.6rem;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto-secundario);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menu-hogares-opcion--activa {
+  border-color: var(--azul);
+  background: var(--azul-tenue);
+  color: var(--azul);
 }
 
 /* Tira de meses del ciclo (jun-jul-ago-...-may); #finanzas-selector-meses

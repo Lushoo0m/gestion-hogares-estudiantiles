@@ -31,6 +31,7 @@ let formAlertaAbierto = false; // formulario de alerta nueva (se abre con el "+"
 let editandoPresupuesto = false; // tarjeta de Presupuesto en modo edición
 let formNuevoMesAbierto = false; // burbuja "+" para crear el mes siguiente
 let vistaActual = 'colonia'; // 'colonia' | 'finanzas' — qué botón está activo arriba
+let hogaresMenuAbierto = false; // desplegable "Hogares" (plegado por default, tap para ver Colonia/Miguelete)
 
 // Finanzas es un gestor paralelo (plata personal, sin ciclo mensual que se
 // cierre): alterna qué contenedores se ven sin tocar el estado de ninguno
@@ -74,6 +75,7 @@ function init() {
   document.getElementById('estado-cuenta').addEventListener('submit', onEstadoCuentaSubmit);
   document.getElementById('estado-cuenta').addEventListener('pointerdown', onAvisoPointerDown);
   document.getElementById('respaldo').addEventListener('click', onRespaldoClick);
+  document.getElementById('selector-hogares').addEventListener('click', onSelectorHogaresClick);
   document.getElementById('selector-meses').addEventListener('click', onSelectorMesesClick);
   document.getElementById('selector-meses').addEventListener('submit', onSelectorMesesSubmit);
 }
@@ -93,43 +95,71 @@ function resetEstadosDeInteraccion() {
   formAlertaAbierto = false;
   editandoPresupuesto = false;
   formNuevoMesAbierto = false;
+  hogaresMenuAbierto = false;
   if (indicadorTimer) {
     clearTimeout(indicadorTimer);
     indicadorTimer = null;
   }
 }
 
+// Navegación superior: dos controles independientes. "Hogares" es un
+// desplegable plegado por default (mismo patrón que Alertas, Gastos
+// previstos, etc.) que al tocarlo revela los Hogares habilitados (Colonia,
+// Miguelete); "Finanzas" es un botón aparte, sin relación con ese
+// desplegable, que lleva directo al gestor personal.
 function renderSelectorHogares() {
   const cont = document.getElementById('selector-hogares');
-  cont.innerHTML = '';
-  getHogaresHabilitados(state).forEach((hogar) => {
-    const btn = document.createElement('button');
-    btn.className = 'tab' + (vistaActual === 'colonia' && hogar.id === hogarSeleccionado ? ' tab--activo' : '');
-    btn.textContent = hogar.nombre;
-    btn.addEventListener('click', () => {
-      hogarSeleccionado = hogar.id;
+  const enHogares = vistaActual === 'colonia';
+
+  let html = '<div class="selector-hogares__fila">';
+  html += `<button type="button" class="tab${enHogares ? ' tab--activo' : ''}${hogaresMenuAbierto ? ' tab--abierto' : ''}" data-action="toggle-menu-hogares">Hogares <span class="tab__flecha">▾</span></button>`;
+  html += `<button type="button" class="tab${vistaActual === 'finanzas' ? ' tab--activo' : ''}" data-action="ir-finanzas">Finanzas</button>`;
+  html += '</div>';
+
+  if (hogaresMenuAbierto) {
+    html += '<div class="menu-hogares-panel">';
+    getHogaresHabilitados(state).forEach((hogar) => {
+      const activa = enHogares && hogar.id === hogarSeleccionado;
+      html += `<button type="button" class="menu-hogares-opcion${activa ? ' menu-hogares-opcion--activa' : ''}" data-action="elegir-hogar" data-hogar="${hogar.id}">${hogar.nombre}</button>`;
+    });
+    html += '</div>';
+  }
+
+  cont.innerHTML = html;
+}
+
+function onSelectorHogaresClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  switch (btn.dataset.action) {
+    case 'toggle-menu-hogares':
+      hogaresMenuAbierto = !hogaresMenuAbierto;
+      renderSelectorHogares();
+      break;
+
+    case 'elegir-hogar': {
+      hogarSeleccionado = btn.dataset.hogar;
       const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
       const activo = meses.find((m) => m.estado === 'activo');
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
       prepararMesActivo();
       resetEstadosDeInteraccion();
+      hogaresMenuAbierto = false;
       mostrarVista('colonia');
       renderSelectorHogares();
       renderSelectorMeses();
       renderEstadoDeCuenta();
-    });
-    cont.appendChild(btn);
-  });
+      break;
+    }
 
-  const btnFinanzas = document.createElement('button');
-  btnFinanzas.className = 'tab' + (vistaActual === 'finanzas' ? ' tab--activo' : '');
-  btnFinanzas.textContent = 'Finanzas';
-  btnFinanzas.addEventListener('click', () => {
-    mostrarVista('finanzas');
-    renderSelectorHogares();
-    renderFinanzas();
-  });
-  cont.appendChild(btnFinanzas);
+    case 'ir-finanzas':
+      hogaresMenuAbierto = false;
+      mostrarVista('finanzas');
+      renderSelectorHogares();
+      renderFinanzas();
+      break;
+  }
 }
 
 // Solo se muestran los meses que ya existen, más un "+" (mismo lenguaje
@@ -144,12 +174,10 @@ function renderSelectorMeses() {
   const hogar = state.hogares[hogarSeleccionado];
   const meses = getMesesOrdenados(hogar);
 
-  if (!meses.length) {
-    cont.innerHTML = '<p class="aviso">Este Hogar todavía no tiene meses cargados.</p>';
-    return;
-  }
-
   let html = '';
+  if (!meses.length) {
+    html += '<p class="aviso">Este Hogar todavía no tiene meses cargados.</p>';
+  }
   meses.forEach((mesObj) => {
     const mesKey = mesObj.mes;
     const seleccionado = mesKey === mesSeleccionado;

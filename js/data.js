@@ -110,14 +110,15 @@ const SEED_STATE = {
         },
       },
     },
-    // Deshabilitado por ahora a pedido: nos concentramos solo en Colonia.
-    // Queda en el modelo para no perder la estructura de "lista abierta de
-    // Hogares" y poder habilitarlo (con sus datos reales) más adelante.
+    // Habilitado para empezar a cargarle datos reales: arranca en limpio,
+    // sin ningún mes generado (a diferencia de Colonia, no se inventa
+    // ningún histórico). El primer mes lo crea la persona con el "+".
     miguelete: {
       id: 'miguelete',
       nombre: 'Miguelete',
-      habilitado: false,
+      habilitado: true,
       gastosFijos: [],
+      previstosRecurrentes: [],
       meses: {},
     },
   },
@@ -182,6 +183,7 @@ function loadState() {
   if (completarPrevistosRecurrentesDesdeSemilla(state)) huboCambios = true;
   if (corregirMesesActivosDuplicados(state)) huboCambios = true;
   if (completarFinanzasDesdeSemilla(state)) huboCambios = true;
+  if (habilitarMiguelete(state)) huboCambios = true;
   if (huboCambios) saveState(state);
   return state;
 }
@@ -280,6 +282,20 @@ function completarPrevistosRecurrentesDesdeSemilla(state) {
     });
   }
   return cambio;
+}
+
+// Miguelete pasa de deshabilitado a habilitado para empezar a cargarle
+// datos reales. Los dispositivos que ya tenían el estado guardado con
+// habilitado:false lo pasan a true acá, una sola vez: no se toca ningún
+// mes ni movimiento (sigue sin tener nada cargado hasta que la persona
+// presione "+" para crear su primer mes).
+function habilitarMiguelete(state) {
+  const miguelete = state.hogares && state.hogares.miguelete;
+  if (miguelete && miguelete.habilitado !== true) {
+    miguelete.habilitado = true;
+    return true;
+  }
+  return false;
 }
 
 // Antes de que existiera el estado "preparado", un error dejaba crear más
@@ -505,15 +521,23 @@ function mesAbrev(mesKey) {
   return `${MES_ABREV[parseInt(mes, 10) - 1]}${anio.slice(2)}`;
 }
 
+// Etiqueta "YYYY-MM" del mes calendario actual, para ofrecerla como primer
+// mes creable de un Hogar recién habilitado que todavía no tiene ninguno.
+function mesActualKey() {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // El selector de meses solo muestra los meses que realmente existen, más
 // un "+" para crear el siguiente — nunca una tira fija con casilleros
 // deshabilitados. Esta función calcula cuál es ese único mes creable: el
-// que sigue cronológicamente al último mes que ya existe para el Hogar.
-// Así se puede ir "preparando el terreno" un mes por vez, nunca más de uno
-// por delante de lo que ya está cargado.
+// que sigue cronológicamente al último mes que ya existe para el Hogar, o
+// el mes actual si el Hogar todavía no tiene ninguno cargado. Así se puede
+// ir "preparando el terreno" un mes por vez, nunca más de uno por delante
+// de lo que ya está cargado.
 function proximoMesCreable(hogar) {
   const claves = Object.keys(hogar.meses).sort();
-  if (!claves.length) return null;
+  if (!claves.length) return mesActualKey();
   const ultima = claves[claves.length - 1];
   const [anio, mes] = ultima.split('-').map(Number);
   const siguienteMes = mes === 12 ? 1 : mes + 1;
