@@ -106,17 +106,18 @@ function resetEstadosDeInteraccion() {
 // desplegable plegado por default (mismo patrón que Alertas, Gastos
 // previstos, etc.) que al tocarlo revela los Hogares habilitados (Colonia,
 // Miguelete); "Finanzas" es un botón aparte, sin relación con ese
-// desplegable, que lleva directo al gestor personal. El botón "Hogares" se
-// pone violeta mientras está desplegado (color distinto del celeste de
-// activo y del oscuro de plegado) para que se note de un vistazo, sin
-// depender de ver el panel de abajo. Dentro, cada Hogar es una burbuja con
-// su inicial que se expande al nombre completo al elegirla.
+// desplegable, que lleva directo al gestor personal. El botón "Hogares"
+// invierte sus colores mientras está desplegado (fondo blanco, letras
+// celeste, en vez de fondo celeste/oscuro con letras claras) para que se
+// note de un vistazo, sin depender de ver el panel de abajo. Dentro, cada
+// Hogar es una burbuja con su inicial que se expande al nombre completo al
+// elegirla.
 function renderSelectorHogares() {
   const cont = document.getElementById('selector-hogares');
   const enHogares = vistaActual === 'colonia';
 
   let html = '<div class="selector-hogares__fila">';
-  html += `<button type="button" class="tab${enHogares ? ' tab--activo' : ''}${hogaresMenuAbierto ? ' tab--abierto' : ''}" data-action="toggle-menu-hogares">🏠 Hogares</button>`;
+  html += `<button type="button" class="tab${enHogares ? ' tab--activo' : ''}${hogaresMenuAbierto ? ' tab--abierto' : ''}" data-action="toggle-menu-hogares"><span class="tab__icono">🏠</span><span class="tab__texto">Hogares</span></button>`;
   html += `<button type="button" class="tab${vistaActual === 'finanzas' ? ' tab--activo' : ''}" data-action="ir-finanzas">Finanzas</button>`;
   html += '</div>';
 
