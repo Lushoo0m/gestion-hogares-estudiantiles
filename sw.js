@@ -2,7 +2,7 @@
 // Los datos viven en localStorage del dispositivo, no acá — esto solo cachea
 // los archivos estáticos (HTML/CSS/JS/iconos).
 
-const CACHE_NAME = 'gh-estudiantiles-v21';
+const CACHE_NAME = 'gh-estudiantiles-v22';
 const ARCHIVOS_APP = [
   './',
   './index.html',

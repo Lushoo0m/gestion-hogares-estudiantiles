@@ -106,13 +106,17 @@ function resetEstadosDeInteraccion() {
 // desplegable plegado por default (mismo patrón que Alertas, Gastos
 // previstos, etc.) que al tocarlo revela los Hogares habilitados (Colonia,
 // Miguelete); "Finanzas" es un botón aparte, sin relación con ese
-// desplegable, que lleva directo al gestor personal.
+// desplegable, que lleva directo al gestor personal. El botón "Hogares" se
+// pone violeta mientras está desplegado (color distinto del celeste de
+// activo y del oscuro de plegado) para que se note de un vistazo, sin
+// depender de ver el panel de abajo. Dentro, cada Hogar es una burbuja con
+// su inicial que se expande al nombre completo al elegirla.
 function renderSelectorHogares() {
   const cont = document.getElementById('selector-hogares');
   const enHogares = vistaActual === 'colonia';
 
   let html = '<div class="selector-hogares__fila">';
-  html += `<button type="button" class="tab${enHogares ? ' tab--activo' : ''}${hogaresMenuAbierto ? ' tab--abierto' : ''}" data-action="toggle-menu-hogares">Hogares <span class="tab__flecha">▾</span></button>`;
+  html += `<button type="button" class="tab${enHogares ? ' tab--activo' : ''}${hogaresMenuAbierto ? ' tab--abierto' : ''}" data-action="toggle-menu-hogares">🏠 Hogares</button>`;
   html += `<button type="button" class="tab${vistaActual === 'finanzas' ? ' tab--activo' : ''}" data-action="ir-finanzas">Finanzas</button>`;
   html += '</div>';
 
@@ -120,7 +124,10 @@ function renderSelectorHogares() {
     html += '<div class="menu-hogares-panel">';
     getHogaresHabilitados(state).forEach((hogar) => {
       const activa = enHogares && hogar.id === hogarSeleccionado;
-      html += `<button type="button" class="menu-hogares-opcion${activa ? ' menu-hogares-opcion--activa' : ''}" data-action="elegir-hogar" data-hogar="${hogar.id}">${hogar.nombre}</button>`;
+      const contenido = activa
+        ? `<span class="burbuja-hogar__nombre">${hogar.nombre.toUpperCase()}</span>`
+        : hogar.nombre.charAt(0).toUpperCase();
+      html += `<button type="button" class="burbuja-hogar${activa ? ' burbuja-hogar--seleccionada' : ''}" data-action="elegir-hogar" data-hogar="${hogar.id}">${contenido}</button>`;
     });
     html += '</div>';
   }
@@ -145,7 +152,7 @@ function onSelectorHogaresClick(e) {
       mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;
       prepararMesActivo();
       resetEstadosDeInteraccion();
-      hogaresMenuAbierto = false;
+      hogaresMenuAbierto = true; // se queda desplegado para mostrar la burbuja expandida con el nombre elegido
       mostrarVista('colonia');
       renderSelectorHogares();
       renderSelectorMeses();
