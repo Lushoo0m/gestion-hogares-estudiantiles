@@ -1,0 +1,9 @@
+# Datos y credenciales generados por server.js al correr en local — nunca
+# deben terminar commiteados al repo (que además es público).
+data/
+state.json
+access-code.txt
+guest-code.txt
+
+node_modules/
+.DS_Store
