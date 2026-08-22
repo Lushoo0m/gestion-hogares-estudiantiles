@@ -58,7 +58,14 @@ function prepararMesActivo() {
   if (mesObj && asegurarPrevistosRecurrentes(hogar, mesObj)) saveState(state);
 }
 
-function init() {
+async function init() {
+  // Si hay un backend propio corriendo (servidor dedicado), su copia del
+  // estado manda por sobre la de este dispositivo. Si no hay backend (por
+  // ejemplo, en GitHub Pages) o no hay conexión, esto no hace nada y se
+  // sigue con lo que ya cargó `state` desde localStorage más arriba.
+  const estadoRemoto = await intentarCargarEstadoRemoto();
+  if (estadoRemoto) state = estadoRemoto;
+
   const meses = getMesesOrdenados(state.hogares[hogarSeleccionado]);
   const activo = meses.find((m) => m.estado === 'activo');
   mesSeleccionado = activo ? activo.mes : meses.length ? meses[meses.length - 1].mes : null;

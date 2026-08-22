@@ -162,6 +162,18 @@ function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+// Todas las migraciones aditivas en un solo lugar, para que se apliquen
+// igual sin importar de dónde vino el estado (localStorage o el servidor).
+function aplicarMigraciones(state) {
+  let huboCambios = completarHistoricoDesdeSemilla(state);
+  if (quitarGastosFijosObsoletos(state)) huboCambios = true;
+  if (completarPrevistosRecurrentesDesdeSemilla(state)) huboCambios = true;
+  if (corregirMesesActivosDuplicados(state)) huboCambios = true;
+  if (completarFinanzasDesdeSemilla(state)) huboCambios = true;
+  if (habilitarMiguelete(state)) huboCambios = true;
+  return huboCambios;
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -178,14 +190,56 @@ function loadState() {
     saveState(state);
     return state;
   }
-  let huboCambios = completarHistoricoDesdeSemilla(state);
-  if (quitarGastosFijosObsoletos(state)) huboCambios = true;
-  if (completarPrevistosRecurrentesDesdeSemilla(state)) huboCambios = true;
-  if (corregirMesesActivosDuplicados(state)) huboCambios = true;
-  if (completarFinanzasDesdeSemilla(state)) huboCambios = true;
-  if (habilitarMiguelete(state)) huboCambios = true;
-  if (huboCambios) saveState(state);
+  if (aplicarMigraciones(state)) saveState(state);
   return state;
+}
+
+// Se pone en true recién después del primer intento de cargar el estado
+// desde el servidor (haya salido bien o mal). Antes de eso, saveState()
+// NUNCA manda nada al servidor: si un dispositivo nuevo arranca sin
+// localStorage propio, loadState() de arriba lo siembra en local con
+// SEED_STATE y llama a saveState() — si eso disparara una sincronización
+// ya mismo, un dispositivo nuevo podría pisar con la semilla vieja el
+// estado real que el servidor ya tiene guardado, justo antes de que
+// intentarCargarEstadoRemoto() llegue a traer ese estado real.
+let sincronizacionHabilitada = false;
+
+// Se llama una sola vez, al arrancar la app (ver init() en app.js). Intenta
+// traer el estado real desde el backend del servidor dedicado; si no hay
+// servidor (por ejemplo, corriendo en GitHub Pages) o no hay conexión,
+// devuelve null y la app sigue con lo que ya cargó localStorage.
+async function intentarCargarEstadoRemoto() {
+  try {
+    const controlador = new AbortController();
+    const timeoutId = setTimeout(() => controlador.abort(), 4000);
+    const resp = await fetch('/api/state', { credentials: 'include', signal: controlador.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return null;
+    const estado = await resp.json();
+    aplicarMigraciones(estado);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(estado)); // copia local como caché/respaldo
+    return estado;
+  } catch (e) {
+    console.warn('No se pudo cargar el estado del servidor: se sigue con la copia local (localStorage).', e);
+    return null;
+  } finally {
+    sincronizacionHabilitada = true;
+  }
+}
+
+// Best-effort, en segundo plano: si falla (sin backend, sin conexión, el
+// código es de solo-lectura, etc.) queda solo un warning en consola. La
+// app nunca depende de que esto funcione para seguir andando — localStorage
+// ya quedó guardado en saveState() antes de llamar a esto.
+function sincronizarConServidor(state) {
+  fetch('/api/state', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+  }).catch((e) => {
+    console.warn('No se pudo sincronizar con el servidor (¿sin backend o sin conexión?). Sigue funcionando en local.', e);
+  });
 }
 
 // Los dispositivos que guardaron datos antes de que existiera Finanzas no
@@ -327,6 +381,7 @@ function corregirMesesActivosDuplicados(state) {
 
 function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (sincronizacionHabilitada) sincronizarConServidor(state);
 }
 
 function getHogaresOrdenados(state) {
@@ -794,4 +849,11 @@ function agregarAlertaFinanzas(finanzas, texto, color) {
 
 function eliminarAlertaFinanzas(finanzas, id) {
   finanzas.alertas = (finanzas.alertas || []).filter((a) => a.id !== id);
+}
+
+// Permite que server.js (Node) reuse este mismo SEED_STATE para la primera
+// carga del backend, sin duplicarlo en otro archivo. No afecta en nada al
+// navegador: ahí `module` no existe, así que este bloque nunca se ejecuta.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { SEED_STATE };
 }
